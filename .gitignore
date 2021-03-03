@@ -1,0 +1,5 @@
+# The python virtualenv
+serpens-venv/*
+
+# The notebooks checkpoints
+.ipynb_checkpoints/*
