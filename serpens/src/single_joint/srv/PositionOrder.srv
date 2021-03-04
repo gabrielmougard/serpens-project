@@ -8,4 +8,4 @@ float32 theta_m_p
 float32 epsilon
 float32 epsilon_p
 ---
-bool ok
+

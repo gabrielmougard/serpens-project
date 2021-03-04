@@ -1,5 +1,5 @@
 #include <ros/ros.h>
-#include "single_joint_episode_generator/OrderGenerator.h"
+#include "single_joint/order_generator.h"
 
 OrderGenerator::OrderGenerator(
     ros::NodeHandle *nh,
