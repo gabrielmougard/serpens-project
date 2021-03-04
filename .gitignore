@@ -3,3 +3,9 @@ serpens-venv/*
 
 # The notebooks checkpoints
 .ipynb_checkpoints/*
+
+# catkin workspace related
+serpens/devel/*
+serpens/build/*
+serpens/.catkin_workspace
+

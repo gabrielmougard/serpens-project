@@ -1,0 +1,6 @@
+order_generator:
+  max_theta_m_p: 8.06 # In rd/s. In RPM it would be 77 RPM (Dynamixel max rotational speed)
+  theta_ld_min: 0.0 # 0.0 rad. Also 0.0 deg.
+  theta_ld_max: 6.26 # 6.26 rad. Also 359 deg.
+  theta_ld_resolution: 0.002 # 0.002 rad. Around 0.1 deg of resolution.
+
