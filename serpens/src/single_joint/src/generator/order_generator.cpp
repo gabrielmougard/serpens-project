@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include <limits>
+#include <cmath>
 
 #include <ros/ros.h>
 
@@ -82,7 +83,6 @@ void OrderGenerator::FeedbackHandler(PositionFeedback::Request &req, PositionFee
     }
 }
 
-
 PositionOrder OrderGenerator::Generate() {
     /*
     Random initialization of the input parameters.
@@ -117,21 +117,28 @@ PositionOrder OrderGenerator::Generate() {
 }
 
 PositionOrder OrderGenerator::Next() {
-
-        int delta = sent->stamp.nsec - received->stamp.nsec;
-        single_joint_episode_generator::JointOrder next;
-        _msg_id_counter += 1;
-        next.time = ros::Time::now();
-        next.msg_id = _msg_id_counter;
-        next.theta_ld = sent->theta_ld; // This is the target parameter so it does not change
-        next.theta_l = received->theta_l_update;
-        next.theta_l_p = (received->theta_l_update - sent->theta_l) / (float)delta;
-        next.theta_m = received->theta_m_update;
-        next.theta_m_p = (received->theta_m_update - sent->theta_m) / (float)delta;
-        next.epsilon = sent->theta_ld - received->theta_l_update;
-        next.epsilon_p = ((sent->theta_ld - received->theta_l_update) - sent->epsilon) / (float)delta;
+        PositionOrder next;
+        int delta = position_feedback_->request.stamp.nsec - position_order_->request.stamp.nsec;
+        next.request.time = ros::Time::now();
+        next.request.msg_id = _msg_id_counter;
+        next.request.theta_ld = position_feedback_->request.theta_ld; // This is the target parameter so it does not change
+        next.request.theta_l = position_feedback_->request.theta_l_update;
+        next.request.theta_l_p = (position_feedback_->request.theta_l_update - position_order_->request.theta_l) / (float)delta;
+        next.request.theta_m = position_feedback_->request.theta_m_update;
+        next.request.theta_m_p = (position_feedback_->request.theta_m_update - position_order_->request.theta_m) / (float)delta;
+        next.request.epsilon =
+            std::abs(
+                position_order_->request.theta_ld -
+                position_feedback_->request.theta_l_update
+            );
+        next.request.epsilon_p =
+            (
+                std::abs(
+                    position_order_->request.theta_ld -
+                    position_feedback_->request.theta_l_update
+                ) - position_order_->request.epsilon
+            ) / (float)delta;
         return next;
-
 }
 
 } // namespace
