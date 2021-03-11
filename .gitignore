@@ -9,3 +9,10 @@ serpens/devel/*
 serpens/build/*
 serpens/.catkin_workspace
 
+# Compiled python
+
+serpens/src/single_joint/scripts/generator/__pycache__/*
+serpens/src/single_joint/scripts/gzactuator/__pycache__/*
+serpens/src/single_joint/scripts/rainbow/__pycache__/*
+serpens/src/single_joint/scripts/watch2bag/__pycache__/*
+

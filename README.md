@@ -49,33 +49,40 @@ The **inference** phase of a single joint come then right after a set of output 
 ## Filesystem architecture
 
 ```
-doc/                        (Where is the documentation ; pictures, texts etc.)
-requirements/               (External Python libraries list to install in the virtual env)
-results/                    (The place where are the simulation results)
-|   notebooks/              (Jupyter Python notebooks for offline analysis)
-|   rl_model_ckpts/         (Place where are saved the .h5 files of the model)
-|   single_joint_states/    (.bag/.csv files written by watch2bag node)
-serpens/                    (ROS source code)
-|   src/                    (catkin src folder)
-|   |   locomotion/         (ROS 'locomotion' package ; this is Challenge 2 as shown above.)  
-|   |   single_joint/       (ROS 'single_joint' package ; this is Challenge 1)
-|   |   |   config/         (.yaml files where we have static configs for the nodes)
-|   |   |   include/        (All the header files for the C++ nodes)
-|   |   |   launch/         (All the .launch files for this package)
-|   |   |   src/            (The source files of every nodes in this package)
-|   |   |   |   generator/  (Sources for the 'generator' node)
-|   |   |   |   gzactuator/ (Sources for the 'gzactuator' node)
-|   |   |   |   rainbow/    (Sources for the 'rainbow' node)
-|   |   |   |   watch2bag/  (Sources for the 'watch2bag' node)
-|   |   |   srv/            (The Service definitions for this package)
-|   |   |   urdf/           (The URDF files like .xacro of this package)
-|   |   |   CMakeLists.txt  (How to bo build this package)
-|   |   |   package.xml     (Package description and dependencies)
+doc/                           (Where is the documentation ; pictures, texts etc.)
+requirements/                  (External Python libraries list to install in the virtual env)
+results/                       (The place where are the simulation results)
+|   notebooks/                 (Jupyter Python notebooks for offline analysis)
+|   rl_model_ckpts/            (Place where are saved the .h5 files of the model)
+|   single_joint_states/       (.bag/.csv files written by watch2bag node)
+serpens/                       (ROS source code)
+|   src/                       (catkin src folder)
+|   |   locomotion/            (ROS 'locomotion' package ; this is Challenge 2 as shown above.)  
+|   |   single_joint/          (ROS 'single_joint' package ; this is Challenge 1)
+|   |   |   config/            (.yaml files where we have static configs for the nodes)
+|   |   |   launch/            (All the .launch files for this package)
+|   |   |   scripts/           (The source files of every nodes in this package)
+|   |   |   |   generator/     (Sources for the 'generator' node)
+|   |   |   |   gzactuator/    (Sources for the 'gzactuator' node)
+|   |   |   |   rainbow/       (Sources for the 'rainbow' node)
+|   |   |   |   watch2bag/     (Sources for the 'watch2bag' node)
+|   |   |   |   generator.py   (executable for the 'generator' node)
+|   |   |   |   gzactuator.py  (executable for the 'gzactuator' node)
+|   |   |   |   rainbow.py     (executable for the 'rainbow' node)
+|   |   |   |   watch2bag.py   (executable for the 'watch2bag' node)
+|   |   |   srv/               (The Service definitions for this package)
+|   |   |   urdf/              (The URDF files like .xacro of this package)
+|   |   |   CMakeLists.txt     (How to bo build this package)
+|   |   |   package.xml        (Package description and dependencies)
     
 ```
 
-## Coding convention for the contributors
+## How to run the single_joint simulation
 
-* For C++ codebase, try to follow the [Google C++ Style Guide](https://google.github.io/styleguide/cppguide.html#Classes)
+* In one terminal launch the `roscore` command
+* In an other terminal, go to `serpens-project/serpens` and `catkin_make` and then `source devel/setup.sh`
+* Finally, type `roslaunch single_joint simulation.launch`
+
+## Coding convention for the contributors
 
 * For Python codebase, try to follow the [Google Python Style Guide](https://google.github.io/styleguide/pyguide.html)

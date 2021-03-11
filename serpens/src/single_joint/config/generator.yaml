@@ -1,4 +1,4 @@
-order_generator:
+generator:
   theta_ld_min: -1.57 # -1.57 rad. Also -90 deg.
   theta_ld_max: 1.57 # 1.57 rad. Also 90 deg.
   theta_ld_resolution: 0.002 # 0.002 rad. Around 0.1 deg of resolution.
