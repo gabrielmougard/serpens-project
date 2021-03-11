@@ -45,6 +45,7 @@ class OrderGenerator:
             res = self.position_order_client(**self.position_order)
         except rospy.ServiceException as e:
             rospy.loginfo("Service call failed: %s"%e)
+        rospy.loginfo(f"Order sent: {self.position_order}")
 
 
     def _feedback_handler(self, req):
@@ -91,10 +92,10 @@ class OrderGenerator:
         rand_theta_m = self._random_sample(self.theta_m_min, self.theta_m_max, self.theta_m_resolution)
         rand_theta_m_p = self._random_sample(self.theta_m_p_min, self.theta_m_p_max, self.theta_m_p_resolution)
 
-        # set the values of the differential parameters.
-        theta_l_p = sys.float_info.max
-        epsilon = sys.float_info.max
-        epsilon_p = sys.float_info.max
+        # set the values of the differential parameters with very big values at first (theoretically infinity)
+        theta_l_p = 1e20 
+        epsilon = 1e20
+        epsilon_p = 1e20
 
         # return the Service to send
         self.position_order["stamp"] = rospy.get_rostime()
@@ -106,6 +107,8 @@ class OrderGenerator:
         self.position_order["theta_m_p"] = rand_theta_m_p
         self.position_order["epsilon"] = epsilon
         self.position_order["epsilon_p"] = epsilon_p
+
+        rospy.loginfo(f"Order generated : {self.position_order}")
 
 
     def _next(self):
@@ -129,9 +132,9 @@ class OrderGenerator:
 
 
     def _random_sample(self, min_val, max_val, resolution):
-        l = (max_val - min_val) // resolution
+        l = int((max_val - min_val) // resolution)
         dist = []
         for i in range(l):
-            dist[i] = min_val + i * resolution
+            dist.append(min_val + i * resolution)
         rand_idx = random.randint(0, l)
         return dist[rand_idx]
