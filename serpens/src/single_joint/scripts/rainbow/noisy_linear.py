@@ -31,31 +31,47 @@ class NoisyLinear(tf.Module):
         self.out_features = out_features
         self.std_init = std_init
 
-        self.weight_mu = tf.Variable(
-            tf.zeros([out_features, in_features], dtype=tf.dtypes.float32, name="weight_mu")
+
+        # Choose a uniform initializer
+        mu_range = 1 / math.sqrt(self.in_features)
+        mu_initializer = tf.random_uniform_initializer(
+            minval=-mu_range, maxval=mu_range, seed=None
         )
-        self.weight_sigma = tf.Variable(
-            tf.zeros([out_features, in_features], dtype=tf.dtypes.float32, name="weight_sigma")
-        )
+        constant_initializer = tf.constant_initializer(value=(self.std_init / math.sqrt(self.in_features)))
+
+        # Initialize layer parameter
+        self.weight_mu = tf.Variable(mu_initializer(shape=[out_features, in_features], dtype=tf.float32, name="weight_mu"))
+        self.weight_sigma = tf.Variable(constant_initializer(shape=[out_features, in_features], dtype=tf.float32, name="weight_sigma"))
+        self.bias_mu = tf.Variable(mu_initializer(shape=[out_features], dtype=tf.dtypes.float32, name="bias_mu"))
+        self.bias_sigma = tf.Variable(constant_initializer(shape=[out_features], dtype=tf.float32, name="bias_sigma"))
+
         self.weight_epsilon = tf.Variable(
-            trainable=False,
-            tf.zeros([out_features, in_features], dtype=tf.dtypes.float32, name="weight_epsilon")
-        )
-        self.bias_mu = tf.Variable(
-            tf.zeros([out_features], dtype=tf.dtypes.float32, name="bias_mu")
-        )
-        self.bias_sigma = tf.Variable(
-            tf.zeros([out_features], dtype=tf.dtypes.float32, name="bias_sigma")
-        )
-        self.bias_epsilon = tf.Variable(
-            trainable=False,
-            tf.zeros([out_features], dtype=tf.dtypes.float32, name="bias_epsilon")
+            tf.zeros([out_features, in_features], dtype=tf.dtypes.float32, name="weight_epsilon"),
+            trainable=False
         )
 
-        self.reset_parameters()
+        self.bias_epsilon = tf.Variable(
+            tf.zeros([out_features], dtype=tf.dtypes.float32, name="bias_epsilon"),
+            trainable=False
+        )
+
         self.reset_noise()
 
 
-    # def reset_parameters(self):
-    #     """Reset trainable network parameters (factorized gaussian noise)."""
-    #     mu_range = 1 / math.sqrt(self.in_features)
+    def reset_noise(self):
+        """
+        Make new noises
+        """
+        epsilon_in = self.scale_noise(self.in_features)
+        epsilon_out = self.scale_noise(self.out_features)
+
+        # outer product
+        self.weight_epsilon.assign(tf.tensordot(epsilon_out, epsilon_in, axes=0))
+        self.bias_epsilon.assign(epsilon_out)
+
+
+    @staticmethod
+    def scale_noise(size: int) -> tf.Tensor:
+        """Set scale to make noise (factorized gaussian noise)."""
+        x = tf.constant(np.random.normal(loc=0.0, scale=1.0, size=size), dtype=tf.dtypes.float32)
+        return tf.math.multiply(tf.math.sign(x), tf.math.sqrt(tf.math.abs(x)))
