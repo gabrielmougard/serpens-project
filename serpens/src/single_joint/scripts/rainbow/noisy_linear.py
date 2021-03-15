@@ -70,6 +70,13 @@ class NoisyLinear(tf.Module):
         self.bias_epsilon.assign(epsilon_out)
 
 
+    def __call__(self, x):
+        return tf.matmul(
+            x,
+            self.weight_mu + self.weight_sigma * self.weight_epsilon
+        ) + self.bias_mu + self.bias_sigma * self.bias_epsilon
+
+
     @staticmethod
     def scale_noise(size: int) -> tf.Tensor:
         """Set scale to make noise (factorized gaussian noise)."""
