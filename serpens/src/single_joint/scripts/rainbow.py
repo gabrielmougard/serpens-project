@@ -33,6 +33,9 @@ def callback(req):
         req.epsilon,
         req.epsilon_p
     )
+    # Cf PositionOrder.srv. The response contains only 1 boolean
+    #named ack
+    return True
     # TODO : call the RL agent here.
 
 
