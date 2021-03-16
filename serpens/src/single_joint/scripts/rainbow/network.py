@@ -20,12 +20,13 @@ class Network(tf.Module):
         in_dim: int,
         out_dim: int,
         atom_size: int,
-        support: tf.Tensor
+        support: tf.Tensor,
+        name=None
     ):
         """
         Initialization
         """
-        super(Network, self).__init__()
+        super(Network, self).__init__(name=name)
 
         self.support = support
         self.out_dim = out_dim
@@ -37,12 +38,12 @@ class Network(tf.Module):
             .add(Dense(128, activation='relu'))
         
         # set advantage layer
-        self.advantage_hidden_layer = NoisyLinear(128, 128)
-        self.advantage_layer = NoisyLinear(128, out_dim * atom_size)
+        self.advantage_hidden_layer = NoisyLinear(128, 128, name="advantage_hidden_layer")
+        self.advantage_layer = NoisyLinear(128, out_dim * atom_size, name="advantage_layer")
 
         # set value layer
-        self.value_hidden_layer = NoisyLinear(128, 128)
-        self.value_layer = NoisyLinear(128, atom_size)
+        self.value_hidden_layer = NoisyLinear(128, 128, name="value_hidden_layer")
+        self.value_layer = NoisyLinear(128, atom_size, name="value_layer")
 
     def __call__(self, x):
         dist = self.dist(x)

@@ -24,9 +24,9 @@ class NoisyLinear(tf.Module):
         
     """
 
-    def __init__(self, in_features: int, out_features: int, std_init: float = 0.5):
+    def __init__(self, in_features: int, out_features: int, std_init: float = 0.5, name=None):
         """Initialization."""
-        super(NoisyLinear, self).__init__()
+        super(NoisyLinear, self).__init__(name=name)
         self.in_features = in_features
         self.out_features = out_features
         self.std_init = std_init
