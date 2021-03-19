@@ -1,1 +1,6 @@
 # Put the hyperparameter of the model here
+rainbow:
+  maximum_torque: 1.8 # cf specs of dinamixel motor
+  torque_resolution : 0.1
+  mode: 1 # determines how the torque is calculated
+  # mode = 1 : no machine learning. 
