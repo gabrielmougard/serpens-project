@@ -4,6 +4,8 @@
 The definition of the RainbowAgent.
 It is the central part of the RL loop.
 """
+from typing import Dict, List, Tuple
+
 import rospy
 import gym
 import numpy as np
@@ -140,6 +142,9 @@ class RainbowAgent:
         selected_action = tf.math.argmax(self.dqn(
             tf.constant(state, dtype=tf.float32)
         ), name="argmax_selected_action")
+        
+        # Convert to numpy ndarray datatype
+        selected_action = selected_action.numpy()
 
         if not self.is_test:
             self.transition = [state, selected_action]
@@ -148,22 +153,206 @@ class RainbowAgent:
 
 
     def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.float64, bool]:
-        # TODO
+        """
+        Take an action and return the response of the env.
+        """
+        next_state, reward, done, _ = self.env.step(action)
+
+        if not self.is_test:
+            self.transition += [reward, next_state, done]
+
+            # N-step transition
+            if self.use_n_step:
+                one_step_transition = self.memory_n.store(*self.transition)
+            # 1-step transition
+            else:
+                one_step_transition = self.transition
+            # add a single step transition
+            if one_step_transition:
+                self.memory.store(*one_step_transition)
+        return next_state, reward, done
+
 
     def update_model(self) -> tf.Tensor:
-        # TODO
-    
+        """
+        Update the model by gradient descent
+        """
+        # PER needs beta to calculate weights
+        samples = self.memory.sample_batch(self.beta)
+        weights = tf.constant(
+            samples["weights"].reshape(-1, 1),
+            dtype=tf.float32,
+            name="update_model_weights"
+        )
+        indices = samples["indices"]
+
+        # 1-step Learning loss
+        elementwise_loss = self._compute_dqn_loss(samples, self.gamma)
+
+
+        with tf.GradientTape() as tape:
+            # PER: importance of sampling before average
+            loss = tf.math.reduced_mean(elementwise_loss * weights)
+
+            # N-step Learning loss
+            # We are going to combine 1-ste[ loss and n-step loss so as to
+            # prevent high-variance.
+            if self.use_n_step:
+                gamma = self.gamma ** self.n_step
+                samples = self.memory_n.sample_batch_from_idxs(indices)
+                elementwise_loss_n_loss = self._compute_dqn_loss(samples, gamma)
+                elementwise_loss += elementwise_loss_n_loss
+
+                # PER: importance of sampling before average
+                loss = tf.math.reduced_mean(elementwise_loss * weights)
+        
+        dqn_variables = self.dqn.trainable_variables
+        gradients = tape.gradient(loss, dqn_variables)
+        gradients, _ = tf,clip_by_global_norm(gradients, 10.0)
+        self.optimizer.apply_gradients(zip(gradients, dqn_variables))
+
+        # PER: update priorities
+        loss_for_prior = elementwise_loss.numpy()
+        new_priorities = loss_for_prior + self.prior_eps
+        self.memory.update_priorities(indices, new_priorities)
+
+        # NoisyNet: reset noise
+        self.dqn.reset_noise()
+        self.dqn_target.reset_noise()
+
+        return loss.numpy().ravel()
+
+
     def train(self, num_frames: int, plotting_interval: int = 200):
-        # TODO
+        """Train the agent."""
+        self.is_test = False
+        
+        state = self.env.reset()
+        update_cnt = 0
+        losses = []
+        scores = []
+        score = 0
+
+        for frame_idx in range(1, num_frames + 1):
+            action = self.select_action(state)
+            next_state, reward, done = self.step(action)
+
+            state = next_state
+            score += reward
+            
+            # NoisyNet: removed decrease of epsilon
+            
+            # PER: increase beta
+            fraction = min(frame_idx / num_frames, 1.0)
+            self.beta = self.beta + fraction * (1.0 - self.beta)
+
+            # if episode ends
+            if done:
+                state = self.env.reset()
+                scores.append(score)
+                score = 0
+
+            # if training is ready
+            if len(self.memory) >= self.batch_size:
+                loss = self.update_model()
+                losses.append(loss)
+                update_cnt += 1
+                
+                # if hard update is needed
+                if update_cnt % self.target_update == 0:
+                    self._target_hard_update()
+
+            # plotting
+            if frame_idx % plotting_interval == 0:
+                self._plot(frame_idx, scores, losses)
+                
+        self.env.close()
+
 
     def test(self) -> List[np.ndarray]:
-        # TODO
+        """Test the agent."""
+        self.is_test = True
+        
+        state = self.env.reset()
+        done = False
+        score = 0
+        
+        frames = []
+        while not done:
+            frames.append(self.env.render(mode="rgb_array"))
+            action = self.select_action(state)
+            next_state, reward, done = self.step(action)
+
+            state = next_state
+            score += reward
+        
+        print("score: ", score)
+        self.env.close()
+        
+        return frames
+
 
     def _compute_dqn_loss(self, samples: Dict[str, np.ndarray], gamma: float) -> tf.Tensor:
-        # TODO
+        with tf.device(self.used_device):
+            state = tf.constant(samples["obs"], dtype=tf.float32)
+            next_state = tf.constant(samples["next_obs"], dtype=tf.float32)
+            action = tf.constant(samples["acts"], dtype=tf.float32)
+            reward = tf.reshape(tf.constant(samples["rews"], dtype=tf.float32), [-1, 1])
+            done = tf.reshape(tf.constant(samples["done"], dtype=tf.float32), [-1, 1])
+
+            # Categorical DQN algorithm
+            delta_z = float(self.v_max - self.v_min) / (self.atom_size - 1)
+
+            # Double DQN
+            next_action = tf.math.argmax(self.dqn(next_state), axis=1)
+            next_dist = tf.norm(self.dqn_target(next_state), ord=2)
+            next_dist = next_dist[range(self.batch_size), next_action]
+
+            t_z = reward + (1 - done) * gamma * self.support
+            t_z = tf.clip_by_value(t_z, clip_value_min=self.v_min, clip_value_max=self.v_max)
+            b = (t_z - self.v_min) / delta_z
+            l = tf.dtypes.cast(tf.math.floor(b), tf.float64)
+            u = tf.dtypes.cast(tf.math.ceil(b), tf.float64)
+
+            offset = (
+                tf.broadcast_to(
+                    tf.expand_dims(
+                        tf.dtypes.cast(
+                            tf.linspace(0, (self.batch_size - 1) * self.atom_size, self.batch_size),
+                            tf.float64
+                        ),
+                        axis=1
+                    ),
+                    [self.batch_size, self.atom_size]
+                )
+            )
+
+            proj_dist = tf.zeros(tf.shape(next_dist), tf.float32)
+
+            proj_dist = tf.tensor_scatter_nd_add(
+                proj_dist, # input tensor
+                tf.dtypes.cast(l + offset, tf.int64), # indices
+                (next_dist * (u - b)) # updates
+            )
+
+            proj_dist = tf.tensor_scatter_nd_add(
+                proj_dist,
+                tf.dtypes.cast(u + offset, tf.int64), # indices
+                (next_dist * (b - l)) # updates
+            )
+
+        dist = self.dqn.dist(state)
+        log_p = tf.math.log(dist[range(self.batch_size), action])
+        elementwise_loss = tf.math.reduce_sum(-(proj_dist * log_p), axis=1)
+
+        return elementwise_loss
+
 
     def _target_hard_update(self):
+        """Hard update: target <- local."""
+        tf.saved_model.save(self.dqn, "./dqn")
+        self.dqn_target = tf.saved_model.load("dqn")
 
 
     def _plot(self, frame_idx: int, scores: List[float], losses: List[float]):
-
+        # TODO : Maybe call our Custom Tensorboard class here...
