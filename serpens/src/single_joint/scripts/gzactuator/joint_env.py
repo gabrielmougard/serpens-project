@@ -86,11 +86,36 @@ class JointEnv(RobotGazeboEnv):
         self.check_all_systems_ready()
 
 
-    def init_internal_var(self, init_pos_value):
-        #TODO
+    def init_internal_var(self, init_torque_value):
+        self.torque = [init_torque_value]
+        self.joints = None
+
 
     def check_publishers_connection(self):
-        #TODO
+        """
+        Checks that all the publishers are working
+        :return:
+        """
+        rate = rospy.Rate(10)  # 10hz
+        while (self._base_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
+            rospy.logdebug("No susbribers to _base_pub yet so we wait and try again")
+            try:
+                rate.sleep()
+            except rospy.ROSInterruptException:
+                # This is to avoid error when world is rested, time when backwards.
+                pass
+        rospy.logdebug("_base_pub Publisher Connected")
+
+        while (self._pole_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
+            rospy.logdebug("No susbribers to _pole_pub yet so we wait and try again")
+            try:
+                rate.sleep()
+            except rospy.ROSInterruptException:
+                # This is to avoid error when world is rested, time when backwards.
+                pass
+        rospy.logdebug("_pole_pub Publisher Connected")
+        rospy.logdebug("All Publishers READY")
+
 
     def _check_all_systems_ready(self, init=True):
         """
