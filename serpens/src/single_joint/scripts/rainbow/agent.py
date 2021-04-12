@@ -4,7 +4,10 @@
 The definition of the RainbowAgent.
 It is the central part of the RL loop.
 """
+import time
 from typing import Dict, List, Tuple
+from collections import deque
+from statistics import mean
 
 import rospy
 import gym
@@ -13,7 +16,9 @@ import tensorflow as tf
 from tf.keras.optimizer import Adam
 
 from prioritized_replay_buffer import PrioritizedReplayBuffer
- 
+from tensorboard import RainbowTensorBoard
+
+
 class RainbowAgent:
     """
     Rainbow Agent interacting with environment.
@@ -54,6 +59,14 @@ class RainbowAgent:
         atom_size: int = 51,
         # N-step Learning
         n_step: int = 3,
+        # Convergence parameters
+        convergence_window: int = 100,
+        convergence_window_epsilon_p: int = 10, 
+        convergence_avg_score: float = 195.0,
+        convergence_avg_epsilon: float = 0.0524, # 3 degs converted to rads
+        convergence_avg_epsilon_p: float = 0.0174, # 1 deg/s converted to rad/s
+        # Tensorboard parameters
+        model_name: str,
     ):
         """
         Initialization.
@@ -134,6 +147,20 @@ class RainbowAgent:
 
         # mode: train / test
         self.is_test = False
+
+        # Custom tensorboard object
+        self.tensorboard = RainbowTensorBoard(
+            log_dir="logs/{}-{}".format(
+                model_name,
+                int(time.time())
+            )
+        )
+        # Convergence criterion
+        self.convergence_window = convergence_window
+        self.convergence_window_epsilon_p = convergence_window_epsilon_p
+        self.convergence_avg_score = convergence_avg_score 
+        self.convergence_avg_epsilon = convergence_avg_epsilon
+        self.convergence_avg_epsilon_p = convergence_avg_epsilon_p
 
 
     def select_action(self, state: np.ndarray) -> np.ndarray:
@@ -223,49 +250,81 @@ class RainbowAgent:
         return loss.numpy().ravel()
 
 
-    def train(self, num_frames: int, plotting_interval: int = 200):
+    def train(self, num_frames: int):
         """Train the agent."""
         self.is_test = False
-        
+
         state = self.env.reset()
         update_cnt = 0
-        losses = []
-        scores = []
-        score = 0
+        scores = deque(maxlen=self.convergence_window)
+        joint_epsilon = deque(maxlen=self.convergence_window)
+        joint_epsilon_p = deque(maxlen=self.convergence_window_epsilon_p)
+        score = 0 # cumulated reward
+        episode_length = 0
+        episode_cnt = 0
 
-        for frame_idx in range(1, num_frames + 1):
+        for frame_idx in range(1, self.num_frames + 1):
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
-
             state = next_state
             score += reward
-            
-            # NoisyNet: removed decrease of epsilon
-            
+            episode_length += 1
+
             # PER: increase beta
-            fraction = min(frame_idx / num_frames, 1.0)
+            fraction = min(frame_idx / self.num_frames, 1.0)
             self.beta = self.beta + fraction * (1.0 - self.beta)
 
-            # if episode ends
             if done:
-                state = self.env.reset()
-                scores.append(score)
-                score = 0
+                # to be used for convergence criterion
+                scores.append(score) 
+                joint_epsilon.append(state[6])
+                joint_epsilon_p.append(state[7])
+                #
 
-            # if training is ready
+                state = self.env.reset()
+                self.tensorboard.update_stats(
+                    score={
+                        "data": score,
+                        "desc": "Score (or cumulated rewards) for an episode - episode index on x-axis."
+                    },
+                    episode_length={
+                        "data": episode_length,
+                        "desc": "Episode length (in frames)"
+                    }
+                )
+                score = 0
+                episode_length = 0
+                episode_cnt += 1
+
+                # check convergence criterion
+                converged = bool(
+                    len(scores) == self.convergence_window and # be sure the score buffer is full
+                    len(joint_epsilon) == self.convergence_window and # same for epsilon buffer
+                    len(joint_epsilon_p) == self.convergence_window and # same for epsilon_p buffer
+                    mean(scores) > self.convergence_avg_score and 
+                    mean(joint_epsilon) < self.convergence_avg_epsilon and
+                    mean(joint_epsilon_p) < self.convergence_avg_epsilon_p
+                )
+                if converged:
+                    rospy.loginfo("Ran {} episodes. Solved after {} trials".format(episode_cnt, frame_idx))
+                    return
+
+            #  if training is ready
             if len(self.memory) >= self.batch_size:
                 loss = self.update_model()
-                losses.append(loss)
+                # plotting loss every frame
+                self.tensorboard.update_stats(
+                    loss={
+                        "data": loss,
+                        "desc": "Loss value."
+                    }
+                )
                 update_cnt += 1
-                
+            
                 # if hard update is needed
                 if update_cnt % self.target_update == 0:
                     self._target_hard_update()
 
-            # plotting
-            if frame_idx % plotting_interval == 0:
-                self._plot(frame_idx, scores, losses)
-                
         self.env.close()
 
 
@@ -352,7 +411,3 @@ class RainbowAgent:
         """Hard update: target <- local."""
         tf.saved_model.save(self.dqn, "./dqn")
         self.dqn_target = tf.saved_model.load("dqn")
-
-
-    def _plot(self, frame_idx: int, scores: List[float], losses: List[float]):
-        # TODO : Maybe call our Custom Tensorboard class here...
