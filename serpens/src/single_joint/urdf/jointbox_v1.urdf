@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.5.1-0-g916b5db  Build Version: 1.5.7152.31018
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="jointbox_v1">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.0629929230197034 -0.101077489654191 -0.0741346542430378"
+        rpy="0 0 0" />
+      <mass
+        value="0.0828799999999998" />
+      <inertia
+        ixx="0.000151718187490998"
+        ixy="-3.99680555811009E-07"
+        ixz="-3.9232079218258E-07"
+        iyy="0.000109709295625709"
+        iyz="3.73227652786365E-09"
+        izz="0.000109709156883293" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://jointbox_v1/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.749019607843137 0.749019607843137 0.749019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://jointbox_v1/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+</robot>
