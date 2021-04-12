@@ -53,6 +53,6 @@ class RainbowTensorBoard(TensorBoard):
     def _write_logs(self, logs, index):
         with self.writer.as_default():
             for name, value in logs.items():
-                tf.summary.scalar(name, value, step=index)
+                tf.summary.scalar(name, value["data"], step=index, description=value["desc"])
                 self.step += 1
                 self.writer.flush()
