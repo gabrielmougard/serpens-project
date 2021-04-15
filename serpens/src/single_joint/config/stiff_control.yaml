@@ -1,0 +1,33 @@
+single_joint:
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 200
+
+
+  #link_1_motor_pos:
+  #   type: effort_controllers/JointPositionController
+  #   joint: link_1_motor
+  #   pid: {p: 10.0, i: 0.2, d: 0.2}
+
+  # link_1_motor_eff:
+  #   type: effort_controllers/JointEffortController
+  #   joint: link_1_motor
+
+  # link_1_spring:
+  #   type: sea_controller/SeaController
+  #   joint: link_1_spring
+  #   pid: {p: 1000, i: 0.01, d: 0.1}
+  
+  link_2_motor_pos:
+    type: effort_controllers/JointPositionController
+    joint: link_2_motor
+    pid: {p: 200.0, i: 1.0, d: 0.2}
+
+  link_2_motor_eff:
+    type: effort_controllers/JointEffortController
+    joint: link_2_motor
+
+  link_2_spring:
+    type: sea_controller/SeaController
+    joint: link_2_spring
+    pid: {p: 1000, i: 0.01, d: 0.1}
