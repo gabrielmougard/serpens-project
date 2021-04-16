@@ -1,0 +1,8 @@
+single_joint:
+  joint_state_controller:
+    type: joint_state_controller/JointStateController
+    publish_rate: 200
+
+  link_motor_effort:
+    type: effort_controllers/JointEffortController
+    joint: fixated_to_pivot

@@ -13,28 +13,23 @@
         <arg name="headless" value="$(arg headless)"/>
     </include>
 
-    <param name="robot_description" command="$(find xacro)/xacro '$(find single_joint)/urdf/seavstiff_world.xacro'" />
+    <param name="robot_description" command="$(find xacro)/xacro '$(find single_joint)/urdf/snake_joint_world.xacro'" />
 
     <node name="urdf_spawner" pkg="gazebo_ros" type="spawn_model" respawn="false" output="screen"
         args="-urdf -model msd_world -param robot_description"/>
 
-    <rosparam file="$(find single_joint)/config/stiff_control.yaml" command="load" />
+    <rosparam file="$(find single_joint)/config/snake_joint_control.yaml" command="load" />
 
     <node name="controller_spawner" pkg="controller_manager"
-          type="spawner" respawn="false" output="screen" 
-          args="joint_state_controller
-                link_2_motor_pos
-                link_2_spring" />
+          type="spawner" respawn="false" output="screen" ns="/single_joint"
+          args="joint_state_controller" />
 
-    <node name="effort_controller_spawner" pkg="controller_manager"
-          type="spawner"
-          args="--stopped
-                link_2_motor_eff" />
+    <node name="effort_controller_spawner" pkg="controller_manager" ns="/single_joint"
+          type="spawner" 
+          args="link_motor_effort" />
 
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
         <remap from="/joint_states" to="/single_joint/joint_states" />
     </node>
-
-    <node pkg="single_joint" type="test_gazebo.py" name="test_gazebo"  output="screen"></node>
 
 </launch>

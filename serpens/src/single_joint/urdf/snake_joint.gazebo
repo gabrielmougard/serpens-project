@@ -5,16 +5,15 @@
         <material>Gazebo/White</material>
     </gazebo>
 
-    <gazebo reference="link_2_rot_out">
+    <gazebo reference="fixated_link">
         <selfCollide>true</selfCollide>
     </gazebo>
 
-    <gazebo reference="link_2_motor">
+    <gazebo reference="fixated_to_pivot">
     </gazebo>
 
-    <gazebo reference="link_2_spring">
+    <gazebo reference="pivot_to_moving_link">
         <springStiffness>14</springStiffness>
     </gazebo>
-
 
 </robot>
