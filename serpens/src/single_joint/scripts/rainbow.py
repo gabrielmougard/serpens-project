@@ -13,7 +13,6 @@ if __name__ == "__main__":
     # Initialize the node and name it.
     rospy.init_node("rainbow")
 
-    n_episodes = rospy.get_param('/rainbow/episodes_training')
     memory_size = rospy.get_param('/rainbow/memory_size')
     batch_size = rospy.get_param('/rainbow/batch_size')
     target_update = rospy.get_param('/rainbow/target_update')

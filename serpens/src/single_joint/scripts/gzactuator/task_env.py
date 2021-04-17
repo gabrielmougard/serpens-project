@@ -4,19 +4,20 @@
 The communication layer with the gzactuator node where
 is defined the Gym Environment of the single joint.
 """
+import math
 
 from gym import utils
-from joint_env import JointEnv
 from gym.envs.registration import register
 from gym import error, spaces
 import rospy
-import math
 import numpy as np
+
+from joint_env import JointEnv
 
 register(
     id="SnakeJoint-v0",
     entry_point="single_joint.gzactuator.task_env:SnakeJoint",
-    max_episode_steps=1000, # TODO: call rospy.get_param() instead
+    max_episode_steps=rospy.get_param('/rainbow/max_episode_steps')
 )
 
 class SnakeJoint(JointEnv):
@@ -87,9 +88,12 @@ class SnakeJoint(JointEnv):
             dtype=np.float32
         )
 
-        JointEnv.__init__(
-            self, control_type=self.control_type
-        )
+        self.episode_external_torque = None
+        self.episode_theta_ld = None
+        self.previous_epsilon = None
+
+        self._set_init_pose()
+        JointEnv.__init__(self)
 
 
     def get_params(self):
@@ -103,7 +107,6 @@ class SnakeJoint(JointEnv):
         self.theta_m_resolution = rospy.get_param("/generator/theta_m_resolution")
         self.theta_m_p_max = rospy.get_param("/generator/theta_m_p_max")
         self.theta_m_p_resolution = rospy.get_param("/generator/theta_m_p_resolution")
-        self.control_type = rospy.get_param('/generator/control_type')
         self.torque_step = rospy.get_param('/generator/torque_step')
 
         # Variables divergence/convergence conditions
@@ -133,20 +136,31 @@ class SnakeJoint(JointEnv):
             self.torque[0] += self.torque_step * 50
 
 
-        self.move_joint(self.torque)
+        self.move_joints(self.torque)
         rospy.sleep(self.running_step) # Wait for some time
     
     
     def _get_obs(self):
-        data = self.joint
+        data = self.joints
+        epsilon = abs(self.episode_theta_ld - data.position[1])
         obs = [
-            # TODO
+            self.episode_theta_ld,
+            data.position[1], # theta_l
+            data.velocity[1], # theta_l_p
+            data.position[0], # theta_m
+            data.velocity[0], # theta_m_p
+            self.episode_external_torque,
+            epsilon, # epsilon
+            (epsilon - self.previous_epsilon) is self.previous_epsilon else np.finfo(np.float32).max # epsilon_p
         ]
+
+        # update self.previous_epsilon for the next times
+        self.previous_epsilon = epsilon
         return np.array(obs)
 
 
     def _is_done(self, observation):
-        data = self.joint
+        data = self.joints
 
         done = bool(
             observation[6] > self.max_allowed_epsilon or
@@ -179,6 +193,9 @@ class SnakeJoint(JointEnv):
         of an episode.
         :return:
         """
+        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        self.previous_epsilon = None
         self.steps_beyond_done = None
 
 
@@ -189,7 +206,5 @@ class SnakeJoint(JointEnv):
         """
 
         self.check_publishers_connection()
-
-        # Reset Internal pos variable
-        self.init_internal_vars(self.init_pos)
-        self.move_joints(self.pos)
+        self.init_internal_vars(self.np_random.uniform(-self.torque_step * 5, self.torque_step * 5))
+        self.move_joints(self.torque)

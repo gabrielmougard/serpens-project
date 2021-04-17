@@ -1,6 +1,33 @@
 # Put the hyperparameter of the model here
 rainbow:
-  maximum_torque: 1.8 # cf specs of dinamixel motor
-  torque_resolution : 0.1
-  mode: 1 # determines how the torque is calculated
-  # mode = 1 : no machine learning. 
+  ## LEARNING AGENT parameters ##
+  num_frames: 1000000 # 1M
+  memory_size: 10000
+  batch_size: 128
+  target_update: 100
+  gamma: 0.99
+  alpha: 0.2
+  beta: 0.6
+  prior_eps: 0.000001
+  categorical_v_min: 0.0
+  categorical_v_max: 200.0
+  categorical_atom_size: 51
+  n_step: 3
+  ## Convergence rule parameters ##
+  convergence_window: 100
+  convergence_window_epsilon_p: 10
+  convergence_avg_score: 195.0
+  convergence_avg_epsilon: 0.0524 # 3 degs converted to rads
+  convergence_avg_epsilon_p: 0.0174 # 1 deg/s converted to rad/s
+  model_name: 'snake_joint'
+  ## GYM ENV parameters ##
+  max_episode_steps: 200
+  n_actions: 8
+  theta_ld_max: 1.57 # 1.57 rad. Also 90 deg.
+  theta_l_max: 1.57 # 1.57 rad. Also 90 deg.
+  theta_m_max: 1.57 # 1.57 rad. Also 90 deg.
+  theta_m_p_max: 8.06 # In rd/s. In RPM it would be 77 RPM (Dynamixel max rotational speed)
+  torque_step: 0.05 # N.m
+  max_allowed_epsilon: 0.8726 # 50 deg
+  min_allowed_epsilon_p: 0.01745 # 1 deg/s
+  max_ep_length: 200

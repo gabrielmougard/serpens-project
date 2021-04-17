@@ -1,62 +1,29 @@
 #!/usr/bin/env python
 
-import gym
-import rospy
-import roslaunch
-import time
-import numpy as np
-from gym import utils, spaces
-from geometry_msgs.msg import Twist
-from std_srvs.srv import Empty
-from gym.utils import seeding
-from gym.envs.registration import register
 import copy
 import math
 import os
+import time
+import rospy
 
+from gym.utils import seeding
 from sensor_msgs.msg import JointState
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Float64
-from gazebo_msgs.srv import SetLinkState
-from gazebo_msgs.msg import LinkState
 from rosgraph_msgs.msg import Clock
 
 from core.robot_gazebo_env import RobotGazeboEnv
 
 
 class JointEnv(RobotGazeboEnv):
-    def __init__(self, control_type):
-        self.publishers_array = []
-        self._base_pub = rospy.Publisher('/snakejoint_v0/base_joint_velocity_controller/command', Float64, queue_size=1)
-        self._pole_pub = rospy.Publisher('/snakejoint_v0/joint_velocity_controller/command', Float64, queue_size=1)
-        self.publishers_array.append(self._base_pub)
-        self.publishers_array.append(self._pole_pub)
+    def __init__(self):
+        self.robot_name_space = "single_joint"
+        self._torque_pub = rospy.Publisher('/{}/link_motor_effort/command'.format(self.robot_name_space), Float64, queue_size=1)
+        
 
-        rospy.Subscriber("/snakejoint_v0/joint_states", JointState, self.joints_callback)
+        rospy.Subscriber("/{}/joint_states".format(self.robot_name_space), JointState, self.joints_callback)
 
-        self.control_type = control_type
-        if self.control_type == "velocity":
-            self.controllers_list = [
-                'joint_state_controller',
-                'pole_joint_velocity_controller',
-                'foot_joint_velocity_controller',
-            ]
-                                    
-        elif self.control_type == "position":
-            self.controllers_list = [
-                'joint_state_controller',
-                'pole_joint_position_controller',
-                'foot_joint_position_controller',
-            ]
-                                    
-        elif self.control_type == "effort":
-            self.controllers_list = [
-                'joint_state_controller',
-                'pole_joint_effort_controller',
-                'foot_joint_effort_controller',
-            ]
+        self.controllers_list = ['link_motor_effort']
 
-        self.robot_name_space = "snakejoint_v0"
         self.reset_controls = True
 
         # Seed the environment
@@ -74,19 +41,12 @@ class JointEnv(RobotGazeboEnv):
         self.joints = data
 
 
-    def _seed(self, seed=None):
+    def _seed(self, seed=5048795115606990371):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
 
-    # RobotEnv methods
-    def _env_setup(self, initial_qpos):
-        self.init_internal_vars(self.init_pos)
-        self.set_init_pose()
-        self.check_all_systems_ready()
-
-
-    def init_internal_var(self, init_torque_value):
+    def init_internal_vars(self, init_torque_value):
         self.torque = [init_torque_value]
         self.joints = None
 
@@ -97,37 +57,47 @@ class JointEnv(RobotGazeboEnv):
         :return:
         """
         rate = rospy.Rate(10)  # 10hz
-        while (self._base_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
-            rospy.logdebug("No susbribers to _base_pub yet so we wait and try again")
+        while (self._torque_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
+            rospy.logdebug("No susbribers to _torque_pub yet so we wait and try again")
             try:
                 rate.sleep()
             except rospy.ROSInterruptException:
                 # This is to avoid error when world is rested, time when backwards.
                 pass
-        rospy.logdebug("_base_pub Publisher Connected")
-
-        while (self._pole_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
-            rospy.logdebug("No susbribers to _pole_pub yet so we wait and try again")
-            try:
-                rate.sleep()
-            except rospy.ROSInterruptException:
-                # This is to avoid error when world is rested, time when backwards.
-                pass
-        rospy.logdebug("_pole_pub Publisher Connected")
+        rospy.logdebug("_torque_pub Publisher Connected")
         rospy.logdebug("All Publishers READY")
 
 
-    def _check_all_systems_ready(self, init=True):
-        """
-        Checks that all the sensors, publishers and other simulation systems are
-        operational.
-        """
-        #TODO
+    # def _check_all_systems_ready(self, init=True):
+    #     """
+    #     Checks that all the sensors, publishers and other simulation systems are
+    #     operational.
+    #     """
+    #     try:
+    #         self.base_position = rospy.wait_for_message("/{}/joint_states".format(self.robot_name_space), JointState, timeout=1.0)
+    #         rospy.logdebug("Current /{}/joint_states READY=>".format(self.robot_name_space))
+    #     except:
+    #         rospy.logerr("Current /{}/joint_states not ready yet, retrying for getting joint_states".format(self.robot_name_space))
+    #     rospy.logdebug("ALL SYSTEMS READY")
+
 
     def move_joints(self, joint_array):
-        #TODO
+        """
+        Apply random external torque to existing torque order
+        and publish it to gazebo.
+        """
+        joint_value = Float64()
+        joint_value.data = joints_array[0] + self.episode_random_external_torque
+        rospy.logdebug("Torque join value : "+str(joint_value))
+        self._torque_pub.publish(joint_value)
+
 
     def get_clock_time(self):
-        #TODO
-
-    
+        self.clock_time = None
+        while self.clock_time is None and not rospy.is_shutdown():
+            try:
+                self.clock_time = rospy.wait_for_message("/clock", Clock, timeout=1.0)
+                rospy.logdebug("Current clock_time READY=>" + str(self.clock_time))
+            except:
+                rospy.logdebug("Current clock_time not ready yet, retrying for getting Current clock_time")
+        return self.clock_time
