@@ -9,7 +9,7 @@ serpens/devel/*
 serpens/build/*
 serpens/.catkin_workspace
 serpens/src/layout_builder/*
-
+serpens/src/series_elastic_actuator/*
 # Compiled python
 
 serpens/src/single_joint/scripts/generator/__pycache__/*
