@@ -1,7 +1,7 @@
 <launch>
     <arg name="paused" default="false"/>
     <arg name="use_sim_time" default="true"/>
-    <arg name="gui" default="true"/>
+    <arg name="gui" default="false"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
 
@@ -31,5 +31,8 @@
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="false" output="screen">
         <remap from="/joint_states" to="/single_joint/joint_states" />
     </node>
+
+    <rosparam file="$(find single_joint)/config/rainbow.yaml" />
+    <node pkg="single_joint" type="rainbow.py" name="rainbow"  output="screen"></node>
 
 </launch>
