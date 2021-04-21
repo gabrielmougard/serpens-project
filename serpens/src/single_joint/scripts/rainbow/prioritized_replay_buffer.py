@@ -15,13 +15,13 @@ outperforming DQN with uniform replay on 41 out of 49 games.
 
 https://arxiv.org/pdf/1511.05952.pdf
 """
-
+import random
 from typing import List, Deque, Dict, Tuple
 
 import numpy as np
-from segment_tree import MinSegmentTree, SumSegmentTree
 
-from replay_buffer import ReplayBuffer
+from rainbow.segment_tree import MinSegmentTree, SumSegmentTree
+from rainbow.replay_buffer import ReplayBuffer
 
 class PrioritizedReplayBuffer(ReplayBuffer):
     """Prioritized Replay buffer.
