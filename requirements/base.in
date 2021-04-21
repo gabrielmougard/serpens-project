@@ -3,4 +3,6 @@ matplotlib
 numpy
 tensorflow
 tensorflow-gpu
+tensorflow-addons
 gym
+tqdm
