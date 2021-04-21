@@ -1,6 +1,0 @@
-<launch>
-
-    <rosparam file="$(find single_joint)/config/rainbow.yaml" />
-    <node pkg="single_joint" type="rainbow.py" name="rainbow"  output="screen"></node>
-
-</launch>

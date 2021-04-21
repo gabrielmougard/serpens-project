@@ -5,18 +5,24 @@ The definition of the RainbowAgent.
 It is the central part of the RL loop.
 """
 import time
+import logging
 from typing import Dict, List, Tuple
 from collections import deque
 from statistics import mean
+from tqdm import tqdm
 
 import rospy
 import gym
 import numpy as np
 import tensorflow as tf
-from tf.keras.optimizer import Adam
+from tensorflow.keras.optimizers import Adam
 
-from prioritized_replay_buffer import PrioritizedReplayBuffer
-from tensorboard import RainbowTensorBoard
+from rainbow.network import Network
+from rainbow.prioritized_replay_buffer import PrioritizedReplayBuffer
+from rainbow.replay_buffer import ReplayBuffer
+from rainbow.tensorboard import RainbowTensorBoard
+
+tf.get_logger().setLevel(logging.ERROR) # Allow only tensorflow error logs to be shown
 
 
 class RainbowAgent:
@@ -66,7 +72,7 @@ class RainbowAgent:
         convergence_avg_epsilon: float = 0.0524, # 3 degs converted to rads
         convergence_avg_epsilon_p: float = 0.0174, # 1 deg/s converted to rad/s
         # Tensorboard parameters
-        model_name: str,
+        model_name: str = "snake_joint",
     ):
         """
         Initialization.
@@ -95,11 +101,13 @@ class RainbowAgent:
         self.gamma = gamma
 
         # Selecting computing device
-        n_gpu = len(tf.config.list_physical_devices('GPU'))
+        physical_devices = tf.config.list_physical_devices('GPU') 
+        n_gpu = len(physical_devices)
         rospy.loginfo("Number of GPU detected : " + str(n_gpu))
         if n_gpu > 0:
             rospy.loginfo("Switching to single GPU mode : /device:GPU:0")
             self.used_device = "/device:GPU:0"
+            tf.config.experimental.set_memory_growth(physical_devices[0], True)
         else:
             rospy.loginfo("No GPU detected. Switching to single CPU mode : /device:CPU:0")
             self.used_device = "/device:CPU:0"
@@ -134,8 +142,8 @@ class RainbowAgent:
             obs_dim, action_dim, self.atom_size, self.support, name="dqn_target"
         )
 
-        tf.saved_model.save(self.dqn, "./dqn")
-        self.dqn_target = tf.saved_model.load("dqn")
+        self.dqn.save_weights("./weights/dqn")
+        self.dqn_target.load_weights("./weights/dqn")
 
         # optimizer
         self.optimizer = Adam(
@@ -167,8 +175,8 @@ class RainbowAgent:
         """Select an action from the input state."""
         # NoisyNet: no epsilon greedy action selection
         selected_action = tf.math.argmax(self.dqn(
-            tf.constant(state, dtype=tf.float32)
-        ), name="argmax_selected_action")
+            tf.constant(state.reshape(1, state.shape[0]), dtype=tf.float32)
+        ), axis=-1, name="argmax_selected_action")
         
         # Convert to numpy ndarray datatype
         selected_action = selected_action.numpy()
@@ -219,7 +227,7 @@ class RainbowAgent:
 
         with tf.GradientTape() as tape:
             # PER: importance of sampling before average
-            loss = tf.math.reduced_mean(elementwise_loss * weights)
+            loss = tf.math.reduce_mean(elementwise_loss * weights)
 
             # N-step Learning loss
             # We are going to combine 1-ste[ loss and n-step loss so as to
@@ -231,11 +239,11 @@ class RainbowAgent:
                 elementwise_loss += elementwise_loss_n_loss
 
                 # PER: importance of sampling before average
-                loss = tf.math.reduced_mean(elementwise_loss * weights)
+                loss = tf.math.reduce_mean(elementwise_loss * weights)
         
         dqn_variables = self.dqn.trainable_variables
         gradients = tape.gradient(loss, dqn_variables)
-        gradients, _ = tf,clip_by_global_norm(gradients, 10.0)
+        gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
         self.optimizer.apply_gradients(zip(gradients, dqn_variables))
 
         # PER: update priorities
@@ -263,7 +271,7 @@ class RainbowAgent:
         episode_length = 0
         episode_cnt = 0
 
-        for frame_idx in range(1, self.num_frames + 1):
+        for frame_idx in tqdm(range(1, num_frames + 1)):
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
             state = next_state
@@ -271,7 +279,7 @@ class RainbowAgent:
             episode_length += 1
 
             # PER: increase beta
-            fraction = min(frame_idx / self.num_frames, 1.0)
+            fraction = min(frame_idx / num_frames, 1.0)
             self.beta = self.beta + fraction * (1.0 - self.beta)
 
             if done:
@@ -315,7 +323,7 @@ class RainbowAgent:
                 # plotting loss every frame
                 self.tensorboard.update_stats(
                     loss={
-                        "data": loss,
+                        "data": loss[0],
                         "desc": "Loss value."
                     }
                 )
@@ -345,7 +353,7 @@ class RainbowAgent:
             state = next_state
             score += reward
         
-        print("score: ", score)
+        rospy.loginfo("score: ", score)
         self.env.close()
         
         return frames
@@ -364,12 +372,15 @@ class RainbowAgent:
 
             # Double DQN
             next_action = tf.math.argmax(self.dqn(next_state), axis=1)
-            next_dist = tf.norm(self.dqn_target(next_state), ord=2)
-            next_dist = next_dist[range(self.batch_size), next_action]
+            next_dist = self.dqn_target.dist(next_state)
+            next_dist = tf.gather_nd(
+                next_dist,
+                [[i, next_action.numpy()[0]] for i in range(self.batch_size)]
+            )
 
             t_z = reward + (1 - done) * gamma * self.support
             t_z = tf.clip_by_value(t_z, clip_value_min=self.v_min, clip_value_max=self.v_max)
-            b = (t_z - self.v_min) / delta_z
+            b = tf.dtypes.cast((t_z - self.v_min) / delta_z, tf.float64)
             l = tf.dtypes.cast(tf.math.floor(b), tf.float64)
             u = tf.dtypes.cast(tf.math.ceil(b), tf.float64)
 
@@ -386,28 +397,40 @@ class RainbowAgent:
                 )
             )
 
-            proj_dist = tf.zeros(tf.shape(next_dist), tf.float32)
+            proj_dist = tf.zeros(tf.shape(next_dist), tf.float64)
+            # casting
+            next_dist = tf.dtypes.cast(next_dist, tf.float64)
 
             proj_dist = tf.tensor_scatter_nd_add(
-                proj_dist, # input tensor
-                tf.dtypes.cast(l + offset, tf.int64), # indices
-                (next_dist * (u - b)) # updates
+                tf.reshape(proj_dist, [-1]), # input tensor
+                tf.reshape(tf.dtypes.cast(l + offset, tf.int64), [-1, 1]), # indices
+                tf.reshape((next_dist * (u - b)), [-1]) # updates
             )
 
             proj_dist = tf.tensor_scatter_nd_add(
                 proj_dist,
-                tf.dtypes.cast(u + offset, tf.int64), # indices
-                (next_dist * (b - l)) # updates
+                tf.reshape(tf.dtypes.cast(u + offset, tf.int64), [-1, 1]), # indices
+                tf.reshape((next_dist * (b - l)), [-1]) # updates
             )
+            proj_dist = tf.reshape(proj_dist, [self.batch_size, self.atom_size])
 
         dist = self.dqn.dist(state)
-        log_p = tf.math.log(dist[range(self.batch_size), action])
+        #log_p = tf.math.log(dist[range(self.batch_size), action])
+        log_p = tf.dtypes.cast(
+            tf.math.log(
+                tf.gather_nd(
+                    dist,
+                    [[i, tf.dtypes.cast(action, tf.int32).numpy()[i]] for i in range(self.batch_size)]
+                )
+            ),
+            tf.float64
+        )
         elementwise_loss = tf.math.reduce_sum(-(proj_dist * log_p), axis=1)
 
-        return elementwise_loss
+        return tf.dtypes.cast(elementwise_loss, tf.float32)
 
 
     def _target_hard_update(self):
         """Hard update: target <- local."""
-        tf.saved_model.save(self.dqn, "./dqn")
-        self.dqn_target = tf.saved_model.load("dqn")
+        self.dqn.save_weights("./weights/dqn")
+        self.dqn_target.load_weights("./weights/dqn")

@@ -3,19 +3,16 @@
 """
 Customized interface for showing the learning metrics in Tensorboard.
 """
-import os
-
-from keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import TensorBoard
 import tensorflow as tf
 
 
 class RainbowTensorBoard(TensorBoard):
     # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
-    def __init__(self, name, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.step = 1
         self.writer = tf.summary.create_file_writer(self.log_dir)
-        self._log_write_dir = os.path.join(self.log_dir, name)
 
 
     # Overriding this method to stop creating default log writer
