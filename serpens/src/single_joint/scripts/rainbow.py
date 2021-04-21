@@ -7,7 +7,7 @@ The main function for the Reinforcement training node.
 import rospy
 
 from rainbow.agent import RainbowAgent
-from gzactuator.task_env import SnakeJoint 
+from gzactuator.joint_env import SnakeJoint 
 
 if __name__ == "__main__":
     # Initialize the node and name it.
@@ -20,9 +20,9 @@ if __name__ == "__main__":
     alpha = rospy.get_param('/rainbow/alpha')
     beta = rospy.get_param('/rainbow/beta')
     prior_eps = rospy.get_param('/rainbow/prior_eps')
-    categorical_v_min = rospy.get_param('/rainbow/categrorical_v_min')
-    categorical_v_max = rospy.get_param('/rainbow/categrorical_v_max')
-    categorical_atom_size = rospy.get_param('/rainbow/categrorical_atom_size')
+    categorical_v_min = rospy.get_param('/rainbow/categorical_v_min')
+    categorical_v_max = rospy.get_param('/rainbow/categorical_v_max')
+    categorical_atom_size = rospy.get_param('/rainbow/categorical_atom_size')
     n_step = rospy.get_param('/rainbow/n_step')
     convergence_window = rospy.get_param('/rainbow/convergence_window')
     convergence_window_epsilon_p = rospy.get_param('/rainbow/convergence_window_epsilon_p')
