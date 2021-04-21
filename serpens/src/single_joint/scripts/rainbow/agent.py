@@ -142,8 +142,8 @@ class RainbowAgent:
             obs_dim, action_dim, self.atom_size, self.support, name="dqn_target"
         )
 
-        self.dqn.save_weights("./weights/dqn")
-        self.dqn_target.load_weights("./weights/dqn")
+        self.dqn.save_weights("./dqn")
+        self.dqn_target.load_weights("./dqn")
 
         # optimizer
         self.optimizer = Adam(
@@ -432,5 +432,5 @@ class RainbowAgent:
 
     def _target_hard_update(self):
         """Hard update: target <- local."""
-        self.dqn.save_weights("./weights/dqn")
-        self.dqn_target.load_weights("./weights/dqn")
+        self.dqn.save_weights("./dqn")
+        self.dqn_target.load_weights("./dqn")
