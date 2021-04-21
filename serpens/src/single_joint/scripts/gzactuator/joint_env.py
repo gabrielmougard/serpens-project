@@ -1,103 +1,206 @@
-#!/usr/bin/env python
+import sys
 
-import copy
-import math
-import os
-import time
-import rospy
-
+import gym
+from gym import spaces
 from gym.utils import seeding
+import rospy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
-from rosgraph_msgs.msg import Clock
-
-from core.robot_gazebo_env import RobotGazeboEnv
+import numpy as np
 
 
-class JointEnv(RobotGazeboEnv):
+class SnakeJoint(gym.Env):
     def __init__(self):
-        self.robot_name_space = "single_joint"
-        self._torque_pub = rospy.Publisher('/{}/link_motor_effort/command'.format(self.robot_name_space), Float64, queue_size=1)
-        
+        self._observation_msg = None
+        self.max_episode_steps = 200
+        self.iterator = 0
+        self.reset_jnts = True
+        self._collision_msg = None
+        self.current_torque = 0.0
 
-        rospy.Subscriber("/{}/joint_states".format(self.robot_name_space), JointState, self.joints_callback)
+        # Get configuration parameters
+        self.n_actions = rospy.get_param('/rainbow/n_actions')
+        self.theta_ld_max = rospy.get_param("/rainbow/theta_ld_max")
+        self.theta_l_max = rospy.get_param("/rainbow/theta_l_max")
+        self.theta_m_max = rospy.get_param("/rainbow/theta_m_max")
+        self.theta_m_p_max = rospy.get_param("/rainbow/theta_m_p_max")
+        self.torque_step = rospy.get_param('/rainbow/torque_step')
+        self.tau_ext_max = rospy.get_param('/rainbow/tau_ext_max')
+        # Variables divergence/convergence conditions
+        self.max_allowed_epsilon =  rospy.get_param('/rainbow/max_allowed_epsilon')
+        self.max_ep_length =  rospy.get_param('/rainbow/max_ep_length')
+        self.min_allowed_epsilon_p =  rospy.get_param('/rainbow/min_allowed_epsilon_p')
 
-        self.controllers_list = ['link_motor_effort']
+        # publishers and subscribers
+        self.torque_pub = rospy.Publisher('/single_joint/link_motor_effort/command', Float64, queue_size=10)
+        rospy.Subscriber('/single_joint/joint_states', JointState, self.observation_callback)
 
-        self.reset_controls = True
+        self.action_space = spaces.Discrete(self.n_actions)
 
-        # Seed the environment
-        self._seed()
-        self.steps_beyond_done = None
+        boundaries = np.array([
+            self.theta_ld_max,
+            self.theta_l_max,
+            np.finfo(np.float32).max,
+            self.theta_m_max,
+            self.theta_m_p_max,
+            self.tau_ext_max,
+            self.theta_ld_max + self.theta_l_max,
+            np.finfo(np.float32).max
+        ])
 
-        super(JointEnv, self).__init__(
-            controllers_list=self.controllers_list,
-            robot_name_space=self.robot_name_space,
-            reset_controls=self.reset_controls
+        self.observation_space = spaces.Box(
+            -boundaries,
+            boundaries,
+            dtype=np.float32
         )
 
+        self.seed()
+        # start the environment server at a refreshing rate of 10Hz
+        self.rate = rospy.Rate(10)
 
-    def joints_callback(self, data):
-        self.joints = data
 
-
-    def _seed(self, seed=5048795115606990371):
+    def seed(self, seed=5048795115606990371):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
 
-    def init_internal_vars(self, init_torque_value):
-        self.torque = [init_torque_value]
-        self.joints = None
-
-
-    def check_publishers_connection(self):
+    def observation_callback(self, message):
         """
-        Checks that all the publishers are working
-        :return:
+        Callback method for the subscriber of JointStates
         """
-        rate = rospy.Rate(10)  # 10hz
-        while (self._torque_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
-            rospy.logdebug("No susbribers to _torque_pub yet so we wait and try again")
-            try:
-                rate.sleep()
-            except rospy.ROSInterruptException:
-                # This is to avoid error when world is rested, time when backwards.
-                pass
-        rospy.logdebug("_torque_pub Publisher Connected")
-        rospy.logdebug("All Publishers READY")
+        self._observation_msg = message
 
 
-    # def _check_all_systems_ready(self, init=True):
-    #     """
-    #     Checks that all the sensors, publishers and other simulation systems are
-    #     operational.
-    #     """
-    #     try:
-    #         self.base_position = rospy.wait_for_message("/{}/joint_states".format(self.robot_name_space), JointState, timeout=1.0)
-    #         rospy.logdebug("Current /{}/joint_states READY=>".format(self.robot_name_space))
-    #     except:
-    #         rospy.logerr("Current /{}/joint_states not ready yet, retrying for getting joint_states".format(self.robot_name_space))
-    #     rospy.logdebug("ALL SYSTEMS READY")
-
-
-    def move_joints(self, joint_array):
+    def take_observation(self):
         """
-        Apply random external torque to existing torque order
-        and publish it to gazebo.
+        Take observation from the environment and return it.
+        :return: state.
         """
+        obs_message = self._observation_msg
+        # Check that the observation is not prior to the action
+        # obs_message = self._observation_msg
+        try:
+            while obs_message is None or int(str(self._observation_msg.header.stamp.secs)+(str(self._observation_msg.header.stamp.nsecs))) < self.ros_clock:
+                rospy.loginfo("I am in obs_message is none")
+                obs_message = self._observation_msg
+                self.rate.sleep()
+        except rospy.ROSInterruptException:
+            sys.exit(1)
+
+        epsilon = abs(self.episode_theta_ld - obs_message.position[1])
+        obs = [
+            self.episode_theta_ld,
+            obs_message.position[1], # theta_l
+            obs_message.velocity[1], # theta_l_p
+            obs_message.position[0], # theta_m
+            obs_message.velocity[0], # theta_m_p
+            self.episode_external_torque,
+            epsilon, # epsilon
+            (epsilon - self.previous_epsilon) if self.previous_epsilon else np.finfo(np.float32).max # epsilon_p
+        ]
+        #Set observation to None after it has been read.
+        # TODO : CHANGELOG : setting self._observation_msg to None create an infinite loop line 83... How to fix it ?
+        #self._observation_msg = None
+        # update self.previous_epsilon for the next times
+        self.previous_epsilon = epsilon
+        return np.array(obs)
+
+
+    def _is_done(self, observation):
+        done = bool(
+            observation[6] > self.max_allowed_epsilon or
+            abs(observation[7]) < self.min_allowed_epsilon_p
+        )
+        return done
+
+
+    def _compute_reward(self, obs, done):
+        """
+        Gives more points for staying upright, gets data from given observations to avoid
+        having different data than other previous functions
+        :return:reward
+        """
+        if not done:
+            reward = 1.0
+        elif self.steps_beyond_done is None:
+            # Joint just diverged
+            self.steps_beyond_done = 0
+            reward = 1.0
+        else:
+            self.steps_beyond_done += 1
+            reward = 0.0
+        return reward
+
+
+    def step(self, action):
+        """
+        Function executed each time step.
+        Here we get the action execute it in a time step and retrieve the
+        observations generated by that action.
+        :param action:
+        :return: obs, reward, done, info
+        """
+
+        """
+        Here we should convert the action num to movement action, execute the action in the
+        simulation and get the observations result of performing that action.
+        """
+        self.iterator+=1
+        # Execute "action"
+        # Take action
+        if action == 0: # decrease torque with very large step
+            self.current_torque -= self.torque_step * 50
+        elif action == 1: # decrease torque with large step
+            self.current_torque -= self.torque_step * 10
+        elif action == 2: # decrease torque with medium step
+            self.current_torque -= self.torque_step * 5
+        elif action == 3: # decrease torque with small step
+            self.current_torque -= self.torque_step
+        elif action == 4: # increase torque with small step
+            self.current_torque += self.torque_step
+        elif action == 5: # increase torque with medium step
+            self.current_torque += self.torque_step * 5
+        elif action == 6: # increase torque with large step
+            self.current_torque += self.torque_step * 10
+        elif action == 7: # increase torque with very large step
+            self.current_torque += self.torque_step * 50
+        
+        
         joint_value = Float64()
-        joint_value.data = joints_array[0] + self.episode_random_external_torque
-        rospy.logdebug("Torque join value : "+str(joint_value))
-        self._torque_pub.publish(joint_value)
+        joint_value.data = self.current_torque + self.episode_external_torque
+        self.torque_pub.publish(joint_value) 
+
+        self.ros_clock = rospy.get_rostime().nsecs
+
+        # Take an observation
+        obs = self.take_observation()
+        done = self._is_done(obs)
+        reward = self._compute_reward(obs, done)
+        info = {}
+
+        return obs, reward, done, info
 
 
-    def get_clock_time(self):
-        self.clock_time = None
-        while self.clock_time is None and not rospy.is_shutdown():
-            try:
-                self.clock_time = rospy.wait_for_message("/clock", Clock, timeout=1.0)
-                rospy.logdebug("Current clock_time READY=>" + str(self.clock_time))
-            except:
-                rospy.logdebug("Current clock_time not ready yet, retrying for getting Current clock_time")
-        return self.clock_time
+    def reset(self):
+        """     
+        Reset the agent for a particular experiment condition.
+        """
+        self.iterator = 0
+
+        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        self.previous_epsilon = None
+        self.steps_beyond_done = None
+        self.torque = 0.0
+        joint_value = Float64()
+        joint_value.data = self.current_torque + self.episode_external_torque
+        self.torque_pub.publish(joint_value) 
+        self.ros_clock = rospy.get_rostime().nsecs
+        obs = self.take_observation()
+
+        return obs
+
+
+    def close(self):
+        rospy.loginfo("Closing SnakeJoint environment")
+        rospy.signal_shutdown("Closing SnakeJoint environment")
