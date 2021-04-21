@@ -1,133 +1,206 @@
-#!/usr/bin/env python
+import sys
 
 import gym
-import rospy
-import roslaunch
-import time
-import numpy as np
-from gym import utils, spaces
-from geometry_msgs.msg import Twist
-from std_srvs.srv import Empty
+from gym import spaces
 from gym.utils import seeding
-from gym.envs.registration import register
-import copy
-import math
-import os
-
+import rospy
 from sensor_msgs.msg import JointState
-from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from std_msgs.msg import Float64
-from gazebo_msgs.srv import SetLinkState
-from gazebo_msgs.msg import LinkState
-from rosgraph_msgs.msg import Clock
-
-from core.robot_gazebo_env import RobotGazeboEnv
+import numpy as np
 
 
-class JointEnv(RobotGazeboEnv):
-    def __init__(self, control_type):
-        self.publishers_array = []
-        self._base_pub = rospy.Publisher('/snakejoint_v0/base_joint_velocity_controller/command', Float64, queue_size=1)
-        self._pole_pub = rospy.Publisher('/snakejoint_v0/joint_velocity_controller/command', Float64, queue_size=1)
-        self.publishers_array.append(self._base_pub)
-        self.publishers_array.append(self._pole_pub)
+class SnakeJoint(gym.Env):
+    def __init__(self):
+        self._observation_msg = None
+        self.max_episode_steps = 200
+        self.iterator = 0
+        self.reset_jnts = True
+        self._collision_msg = None
+        self.current_torque = 0.0
 
-        rospy.Subscriber("/snakejoint_v0/joint_states", JointState, self.joints_callback)
+        # Get configuration parameters
+        self.n_actions = rospy.get_param('/rainbow/n_actions')
+        self.theta_ld_max = rospy.get_param("/rainbow/theta_ld_max")
+        self.theta_l_max = rospy.get_param("/rainbow/theta_l_max")
+        self.theta_m_max = rospy.get_param("/rainbow/theta_m_max")
+        self.theta_m_p_max = rospy.get_param("/rainbow/theta_m_p_max")
+        self.torque_step = rospy.get_param('/rainbow/torque_step')
+        self.tau_ext_max = rospy.get_param('/rainbow/tau_ext_max')
+        # Variables divergence/convergence conditions
+        self.max_allowed_epsilon =  rospy.get_param('/rainbow/max_allowed_epsilon')
+        self.max_ep_length =  rospy.get_param('/rainbow/max_ep_length')
+        self.min_allowed_epsilon_p =  rospy.get_param('/rainbow/min_allowed_epsilon_p')
 
-        self.control_type = control_type
-        if self.control_type == "velocity":
-            self.controllers_list = [
-                'joint_state_controller',
-                'pole_joint_velocity_controller',
-                'foot_joint_velocity_controller',
-            ]
-                                    
-        elif self.control_type == "position":
-            self.controllers_list = [
-                'joint_state_controller',
-                'pole_joint_position_controller',
-                'foot_joint_position_controller',
-            ]
-                                    
-        elif self.control_type == "effort":
-            self.controllers_list = [
-                'joint_state_controller',
-                'pole_joint_effort_controller',
-                'foot_joint_effort_controller',
-            ]
+        # publishers and subscribers
+        self.torque_pub = rospy.Publisher('/single_joint/link_motor_effort/command', Float64, queue_size=10)
+        rospy.Subscriber('/single_joint/joint_states', JointState, self.observation_callback)
 
-        self.robot_name_space = "snakejoint_v0"
-        self.reset_controls = True
+        self.action_space = spaces.Discrete(self.n_actions)
 
-        # Seed the environment
-        self._seed()
-        self.steps_beyond_done = None
+        boundaries = np.array([
+            self.theta_ld_max,
+            self.theta_l_max,
+            np.finfo(np.float32).max,
+            self.theta_m_max,
+            self.theta_m_p_max,
+            self.tau_ext_max,
+            self.theta_ld_max + self.theta_l_max,
+            np.finfo(np.float32).max
+        ])
 
-        super(JointEnv, self).__init__(
-            controllers_list=self.controllers_list,
-            robot_name_space=self.robot_name_space,
-            reset_controls=self.reset_controls
+        self.observation_space = spaces.Box(
+            -boundaries,
+            boundaries,
+            dtype=np.float32
         )
 
+        self.seed()
+        # start the environment server at a refreshing rate of 10Hz
+        self.rate = rospy.Rate(10)
 
-    def joints_callback(self, data):
-        self.joints = data
 
-
-    def _seed(self, seed=None):
+    def seed(self, seed=5048795115606990371):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
 
-    # RobotEnv methods
-    def _env_setup(self, initial_qpos):
-        self.init_internal_vars(self.init_pos)
-        self.set_init_pose()
-        self.check_all_systems_ready()
-
-
-    def init_internal_var(self, init_torque_value):
-        self.torque = [init_torque_value]
-        self.joints = None
-
-
-    def check_publishers_connection(self):
+    def observation_callback(self, message):
         """
-        Checks that all the publishers are working
-        :return:
+        Callback method for the subscriber of JointStates
         """
-        rate = rospy.Rate(10)  # 10hz
-        while (self._base_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
-            rospy.logdebug("No susbribers to _base_pub yet so we wait and try again")
-            try:
-                rate.sleep()
-            except rospy.ROSInterruptException:
-                # This is to avoid error when world is rested, time when backwards.
-                pass
-        rospy.logdebug("_base_pub Publisher Connected")
-
-        while (self._pole_pub.get_num_connections() == 0 and not rospy.is_shutdown()):
-            rospy.logdebug("No susbribers to _pole_pub yet so we wait and try again")
-            try:
-                rate.sleep()
-            except rospy.ROSInterruptException:
-                # This is to avoid error when world is rested, time when backwards.
-                pass
-        rospy.logdebug("_pole_pub Publisher Connected")
-        rospy.logdebug("All Publishers READY")
+        self._observation_msg = message
 
 
-    def _check_all_systems_ready(self, init=True):
+    def take_observation(self):
         """
-        Checks that all the sensors, publishers and other simulation systems are
-        operational.
+        Take observation from the environment and return it.
+        :return: state.
         """
-        #TODO
+        obs_message = self._observation_msg
+        # Check that the observation is not prior to the action
+        # obs_message = self._observation_msg
+        try:
+            while obs_message is None or int(str(self._observation_msg.header.stamp.secs)+(str(self._observation_msg.header.stamp.nsecs))) < self.ros_clock:
+                rospy.loginfo("I am in obs_message is none")
+                obs_message = self._observation_msg
+                self.rate.sleep()
+        except rospy.ROSInterruptException:
+            sys.exit(1)
 
-    def move_joints(self, joint_array):
-        #TODO
+        epsilon = abs(self.episode_theta_ld - obs_message.position[1])
+        obs = [
+            self.episode_theta_ld,
+            obs_message.position[1], # theta_l
+            obs_message.velocity[1], # theta_l_p
+            obs_message.position[0], # theta_m
+            obs_message.velocity[0], # theta_m_p
+            self.episode_external_torque,
+            epsilon, # epsilon
+            (epsilon - self.previous_epsilon) if self.previous_epsilon else np.finfo(np.float32).max # epsilon_p
+        ]
+        #Set observation to None after it has been read.
+        # TODO : CHANGELOG : setting self._observation_msg to None create an infinite loop line 83... How to fix it ?
+        #self._observation_msg = None
+        # update self.previous_epsilon for the next times
+        self.previous_epsilon = epsilon
+        return np.array(obs)
 
-    def get_clock_time(self):
-        #TODO
 
-    
+    def _is_done(self, observation):
+        done = bool(
+            observation[6] > self.max_allowed_epsilon or
+            abs(observation[7]) < self.min_allowed_epsilon_p
+        )
+        return done
+
+
+    def _compute_reward(self, obs, done):
+        """
+        Gives more points for staying upright, gets data from given observations to avoid
+        having different data than other previous functions
+        :return:reward
+        """
+        if not done:
+            reward = 1.0
+        elif self.steps_beyond_done is None:
+            # Joint just diverged
+            self.steps_beyond_done = 0
+            reward = 1.0
+        else:
+            self.steps_beyond_done += 1
+            reward = 0.0
+        return reward
+
+
+    def step(self, action):
+        """
+        Function executed each time step.
+        Here we get the action execute it in a time step and retrieve the
+        observations generated by that action.
+        :param action:
+        :return: obs, reward, done, info
+        """
+
+        """
+        Here we should convert the action num to movement action, execute the action in the
+        simulation and get the observations result of performing that action.
+        """
+        self.iterator+=1
+        # Execute "action"
+        # Take action
+        if action == 0: # decrease torque with very large step
+            self.current_torque -= self.torque_step * 50
+        elif action == 1: # decrease torque with large step
+            self.current_torque -= self.torque_step * 10
+        elif action == 2: # decrease torque with medium step
+            self.current_torque -= self.torque_step * 5
+        elif action == 3: # decrease torque with small step
+            self.current_torque -= self.torque_step
+        elif action == 4: # increase torque with small step
+            self.current_torque += self.torque_step
+        elif action == 5: # increase torque with medium step
+            self.current_torque += self.torque_step * 5
+        elif action == 6: # increase torque with large step
+            self.current_torque += self.torque_step * 10
+        elif action == 7: # increase torque with very large step
+            self.current_torque += self.torque_step * 50
+        
+        
+        joint_value = Float64()
+        joint_value.data = self.current_torque + self.episode_external_torque
+        self.torque_pub.publish(joint_value) 
+
+        self.ros_clock = rospy.get_rostime().nsecs
+
+        # Take an observation
+        obs = self.take_observation()
+        done = self._is_done(obs)
+        reward = self._compute_reward(obs, done)
+        info = {}
+
+        return obs, reward, done, info
+
+
+    def reset(self):
+        """     
+        Reset the agent for a particular experiment condition.
+        """
+        self.iterator = 0
+
+        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        self.previous_epsilon = None
+        self.steps_beyond_done = None
+        self.torque = 0.0
+        joint_value = Float64()
+        joint_value.data = self.current_torque + self.episode_external_torque
+        self.torque_pub.publish(joint_value) 
+        self.ros_clock = rospy.get_rostime().nsecs
+        obs = self.take_observation()
+
+        return obs
+
+
+    def close(self):
+        rospy.loginfo("Closing SnakeJoint environment")
+        rospy.signal_shutdown("Closing SnakeJoint environment")

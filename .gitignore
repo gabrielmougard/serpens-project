@@ -8,11 +8,26 @@ serpens-venv/*
 serpens/devel/*
 serpens/build/*
 serpens/.catkin_workspace
+serpens/src/layout_builder/*
+serpens/src/series_elastic_actuator/*
 
 # Compiled python
-
-serpens/src/single_joint/scripts/generator/__pycache__/*
 serpens/src/single_joint/scripts/gzactuator/__pycache__/*
+serpens/src/single_joint/scripts/gzactuator/core/__pycache__/*
 serpens/src/single_joint/scripts/rainbow/__pycache__/*
-serpens/src/single_joint/scripts/watch2bag/__pycache__/*
 
+# Folder for potentially useful files at a late point
+serpens/ignored/*
+# Gazebo tutorial package
+serpens/src/gazebo_ros_demos/*
+# Temporary files that spawn sometimes
+serpens/src/single_joint/urdf/*.swp
+#series_elastic_actuator package from filippo 
+serpens/src/serues_elastic_actuator
+
+# tensorboard metrics and saved models
+serpens/src/single_joint/scripts/dqn/*
+serpens/src/single_joint/scripts/logs/*
+
+# utility script for downloading metrics to local machine
+tensorboard_download.sh

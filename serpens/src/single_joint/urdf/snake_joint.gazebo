@@ -1,0 +1,19 @@
+<?xml version="1.0" ?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+    <gazebo reference="base_link_rotation">
+        <material>Gazebo/White</material>
+    </gazebo>
+
+    <gazebo reference="fixated_link">
+        <selfCollide>true</selfCollide>
+    </gazebo>
+
+    <gazebo reference="fixated_to_pivot">
+    </gazebo>
+
+    <gazebo reference="pivot_to_moving_link">
+        <springStiffness>14</springStiffness>
+    </gazebo>
+
+</robot>
