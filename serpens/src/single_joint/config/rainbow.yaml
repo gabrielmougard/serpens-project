@@ -27,6 +27,7 @@ rainbow:
   theta_l_max: 1.57 # 1.57 rad. Also 90 deg.
   theta_m_max: 1.57 # 1.57 rad. Also 90 deg.
   theta_m_p_max: 8.06 # In rd/s. In RPM it would be 77 RPM (Dynamixel max rotational speed)
+  tau_ext_max: 2.0 # N.m
   torque_step: 0.05 # N.m
   max_allowed_epsilon: 0.8726 # 50 deg
   min_allowed_epsilon_p: 0.01745 # 1 deg/s
