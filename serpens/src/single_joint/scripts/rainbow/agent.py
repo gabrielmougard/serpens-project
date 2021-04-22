@@ -16,13 +16,16 @@ import gym
 import numpy as np
 import tensorflow as tf
 from tensorflow.keras.optimizers import Adam
+from cpprb import ReplayBuffer, PrioritizedReplayBuffer
 
 from rainbow.network import Network
-from rainbow.prioritized_replay_buffer import PrioritizedReplayBuffer
-from rainbow.replay_buffer import ReplayBuffer
 from rainbow.tensorboard import RainbowTensorBoard
+from rainbow.util import TqdmToLogger
 
+logger = logging.getLogger()
+logger.setLevel(logging.DEBUG)
 tf.get_logger().setLevel(logging.ERROR) # Allow only tensorflow error logs to be shown
+tqdm_out = TqdmToLogger(logger,level=logging.INFO)
 
 
 class RainbowAgent:
@@ -117,7 +120,15 @@ class RainbowAgent:
         self.beta = beta
         self.prior_eps = prior_eps
         self.memory = PrioritizedReplayBuffer(
-            obs_dim, memory_size, batch_size, alpha=alpha
+            memory_size,
+            {
+                "obs": {"shape": (obs_dim,)},
+                "act": {"shape": (1,)},
+                "rew": {},
+                "next_obs": {"shape": (obs_dim,)},
+                "done": {}
+            },
+            alpha=alpha    
         )
 
         # memory for N-step learning
@@ -125,7 +136,20 @@ class RainbowAgent:
         if self.use_n_step:
             self.n_step = n_step
             self.memory_n = ReplayBuffer(
-                obs_dim, memory_size, batch_size, n_step=n_step, gamma=gamma
+                memory_size,
+                {
+                    "obs": {"shape": (obs_dim,)},
+                    "act": {"shape": (1,)},
+                    "rew": {},
+                    "next_obs": {"shape": (obs_dim,)},
+                    "done": {}
+                },
+                Nstep={
+                    "size": n_step,
+                    "gamma": gamma,
+                    "rew": "rew",
+                    "next": "next_obs"
+                }
             )
 
         # Categorical DQN parameters
@@ -141,9 +165,6 @@ class RainbowAgent:
         self.dqn_target = Network(
             obs_dim, action_dim, self.atom_size, self.support, name="dqn_target"
         )
-
-        self.dqn.save_weights("./dqn")
-        self.dqn_target.load_weights("./dqn")
 
         # optimizer
         self.optimizer = Adam(
@@ -198,13 +219,23 @@ class RainbowAgent:
 
             # N-step transition
             if self.use_n_step:
-                one_step_transition = self.memory_n.store(*self.transition)
+                idx = self.memory_n.add(
+                    **dict(
+                        zip(["obs", "act", "rew", "next_obs", "done"], self.transition)
+                    )
+                )
+                one_step_transition = [ v[idx] for _,v in self.memory_n.get_all_transitions().items()] if idx else None
+
             # 1-step transition
             else:
                 one_step_transition = self.transition
             # add a single step transition
             if one_step_transition:
-                self.memory.store(*one_step_transition)
+                self.memory.add(
+                    **dict(
+                        zip(["obs", "act", "rew", "next_obs", "done"], one_step_transition)
+                    )
+                )
         return next_state, reward, done
 
 
@@ -213,13 +244,13 @@ class RainbowAgent:
         Update the model by gradient descent
         """
         # PER needs beta to calculate weights
-        samples = self.memory.sample_batch(self.beta)
+        samples = self.memory.sample(self.batch_size, beta=self.beta)
         weights = tf.constant(
             samples["weights"].reshape(-1, 1),
             dtype=tf.float32,
             name="update_model_weights"
         )
-        indices = samples["indices"]
+        indices = samples["indexes"]
 
         # 1-step Learning loss
         elementwise_loss = self._compute_dqn_loss(samples, self.gamma)
@@ -234,7 +265,7 @@ class RainbowAgent:
             # prevent high-variance.
             if self.use_n_step:
                 gamma = self.gamma ** self.n_step
-                samples = self.memory_n.sample_batch_from_idxs(indices)
+                samples = {k: [v[i] for i in indices] for k,v in self.memory_n.get_all_transitions().items()}
                 elementwise_loss_n_loss = self._compute_dqn_loss(samples, gamma)
                 elementwise_loss += elementwise_loss_n_loss
 
@@ -271,7 +302,7 @@ class RainbowAgent:
         episode_length = 0
         episode_cnt = 0
 
-        for frame_idx in tqdm(range(1, num_frames + 1)):
+        for frame_idx in tqdm(range(1, num_frames + 1), file=tqdm_out):
             action = self.select_action(state)
             next_state, reward, done = self.step(action)
             state = next_state
@@ -318,7 +349,7 @@ class RainbowAgent:
                     return
 
             #  if training is ready
-            if len(self.memory) >= self.batch_size:
+            if self.memory.get_stored_size() >= self.batch_size:
                 loss = self.update_model()
                 # plotting loss every frame
                 self.tensorboard.update_stats(
@@ -328,7 +359,6 @@ class RainbowAgent:
                     }
                 )
                 update_cnt += 1
-            
                 # if hard update is needed
                 if update_cnt % self.target_update == 0:
                     self._target_hard_update()
@@ -363,8 +393,8 @@ class RainbowAgent:
         with tf.device(self.used_device):
             state = tf.constant(samples["obs"], dtype=tf.float32)
             next_state = tf.constant(samples["next_obs"], dtype=tf.float32)
-            action = tf.constant(samples["acts"], dtype=tf.float32)
-            reward = tf.reshape(tf.constant(samples["rews"], dtype=tf.float32), [-1, 1])
+            action = tf.constant(samples["act"], dtype=tf.float32)
+            reward = tf.reshape(tf.constant(samples["rew"], dtype=tf.float32), [-1, 1])
             done = tf.reshape(tf.constant(samples["done"], dtype=tf.float32), [-1, 1])
 
             # Categorical DQN algorithm
@@ -420,7 +450,7 @@ class RainbowAgent:
             tf.math.log(
                 tf.gather_nd(
                     dist,
-                    [[i, tf.dtypes.cast(action, tf.int32).numpy()[i]] for i in range(self.batch_size)]
+                    [[i, tf.dtypes.cast(tf.reshape(action, [-1]), tf.int32).numpy()[i]] for i in range(self.batch_size)]
                 )
             ),
             tf.float64
@@ -432,5 +462,5 @@ class RainbowAgent:
 
     def _target_hard_update(self):
         """Hard update: target <- local."""
-        self.dqn.save_weights("./dqn")
-        self.dqn_target.load_weights("./dqn")
+        tf.saved_model.save(self.dqn, "dqn")
+        self.dqn_target = tf.saved_model.load("dqn")
