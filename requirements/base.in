@@ -6,3 +6,4 @@ tensorflow-gpu
 tensorflow-addons
 gym
 tqdm
+cpprb

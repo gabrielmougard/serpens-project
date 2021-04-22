@@ -23,6 +23,8 @@ chardet==4.0.0
     # via requests
 cloudpickle==1.6.0
     # via gym
+cpprb==10.1.0
+    # via -r requirements/base.in
 cycler==0.10.0
     # via matplotlib
 distro==1.5.0
@@ -77,6 +79,7 @@ matplotlib==3.3.4
 numpy==1.19.5
     # via
     #   -r requirements/base.in
+    #   cpprb
     #   gym
     #   h5py
     #   keras-preprocessing
