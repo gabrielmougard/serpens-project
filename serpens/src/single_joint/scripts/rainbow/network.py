@@ -20,19 +20,19 @@ from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.activations import relu, softmax
 
 
-class Network(tf.keras.Model):
+class Network(tf.Module):
     def __init__(
         self,
         in_dim: int,
         out_dim: int,
         atom_size: int,
         support: tf.Tensor,
-        name=None
+        **kwargs
     ):
         """
         Initialization
         """
-        super(Network, self).__init__(name=name)
+        super(Network, self).__init__(**kwargs)
 
         self.support = support
         self.out_dim = out_dim
@@ -51,12 +51,15 @@ class Network(tf.keras.Model):
         self.value_hidden_layer = NoisyDense(128, name="value_hidden_layer")
         self.value_layer = NoisyDense(atom_size, name="value_layer")
 
+
+    @tf.function
     def __call__(self, x):
         dist = self.dist(x)
         q = tf.reduce_sum(dist * self.support, axis=2)
         return q
 
 
+    @tf.function
     def dist(self, x):
         """
         Get distribution for atoms
@@ -71,6 +74,7 @@ class Network(tf.keras.Model):
         return tf.clip_by_value(dist, clip_value_min=1e-3, clip_value_max=float('inf')) # for avoiding NaNs
 
 
+    @tf.function
     def reset_noise(self):
         """
         Reset all noisy layers.
