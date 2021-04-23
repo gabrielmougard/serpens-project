@@ -4,8 +4,8 @@
 The definition of the RainbowAgent.
 It is the central part of the RL loop.
 """
-import time
 import logging
+from datetime import datetime
 from typing import Dict, List, Tuple
 from collections import deque
 from statistics import mean
@@ -181,7 +181,7 @@ class RainbowAgent:
         self.tensorboard = RainbowTensorBoard(
             log_dir="logs/{}-{}".format(
                 model_name,
-                int(time.time())
+                datetime.now().strftime("%m-%d-%Y-%H_%M_%S")
             )
         )
         # Convergence criterion

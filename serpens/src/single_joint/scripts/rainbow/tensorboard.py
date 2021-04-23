@@ -11,6 +11,7 @@ class RainbowTensorBoard(TensorBoard):
     # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        tf.summary.trace_on(graph=True, profiler=True)
         self.step = 1
         self.writer = tf.summary.create_file_writer(self.log_dir)
 

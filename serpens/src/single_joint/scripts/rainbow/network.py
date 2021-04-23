@@ -53,6 +53,7 @@ class Network(tf.Module):
 
 
     @tf.function
+    @tf.Module.with_name_scope
     def __call__(self, x):
         dist = self.dist(x)
         q = tf.reduce_sum(dist * self.support, axis=2)
@@ -60,6 +61,7 @@ class Network(tf.Module):
 
 
     @tf.function
+    @tf.Module.with_name_scope
     def dist(self, x):
         """
         Get distribution for atoms
@@ -75,6 +77,7 @@ class Network(tf.Module):
 
 
     @tf.function
+    @tf.Module.with_name_scope
     def reset_noise(self):
         """
         Reset all noisy layers.
