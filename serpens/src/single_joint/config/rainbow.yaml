@@ -1,7 +1,7 @@
 # Put the hyperparameter of the model here
 rainbow:
   ## LEARNING AGENT parameters ##
-  num_frames: 1000000 # 1M
+  num_frames: 100000 # 100K
   memory_size: 10000
   batch_size: 128
   target_update: 100
@@ -30,5 +30,5 @@ rainbow:
   tau_ext_max: 2.0 # N.m
   torque_step: 0.05 # N.m
   max_allowed_epsilon: 0.8726 # 50 deg
-  min_allowed_epsilon_p: 0.01745 # 1 deg/s
+  min_allowed_epsilon_p: 0.0000000001 # 1e-10
   max_ep_length: 200

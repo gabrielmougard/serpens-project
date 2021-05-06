@@ -179,7 +179,7 @@ class RainbowAgent:
 
         # Custom tensorboard object
         self.tensorboard = RainbowTensorBoard(
-            log_dir="logs/{}-{}".format(
+            log_dir="single_joint_logs/{}-{}".format(
                 model_name,
                 datetime.now().strftime("%m-%d-%Y-%H_%M_%S")
             )
@@ -190,6 +190,12 @@ class RainbowAgent:
         self.convergence_avg_score = convergence_avg_score 
         self.convergence_avg_epsilon = convergence_avg_epsilon
         self.convergence_avg_epsilon_p = convergence_avg_epsilon_p
+
+        # model checkpoint object
+        self.checkpoint = tf.train.Checkpoint(optimizer=self.optimizer, model=self.dqn_target)
+        self.checkpoint_manager = tf.train.CheckpointManager(
+            self.checkpoint, directory="single_joint_ckpts", max_to_keep=5
+        )
 
 
     def select_action(self, state: np.ndarray) -> np.ndarray:
@@ -313,7 +319,11 @@ class RainbowAgent:
             fraction = min(frame_idx / num_frames, 1.0)
             self.beta = self.beta + fraction * (1.0 - self.beta)
 
+            print("epsilon_p is {}".format(state[7]))
+            print("epsilon is {}".format(state[6]))
+
             if done:
+                print("done")
                 # to be used for convergence criterion
                 scores.append(score) 
                 joint_epsilon.append(state[6])
@@ -329,6 +339,14 @@ class RainbowAgent:
                     episode_length={
                         "data": episode_length,
                         "desc": "Episode length (in frames)"
+                    },
+                    final_epsilon={
+                        "data": state[6],
+                        "desc": "Value of epsilon = abs(theta_ld - theta_l) at the last frame of an episode"
+                    },
+                    final_epsilon_p={
+                        "data": state[7],
+                        "desc": "Value of d(epsilon)/dt at the last frame of an episode"
                     }
                 )
                 score = 0
@@ -362,6 +380,9 @@ class RainbowAgent:
                 # if hard update is needed
                 if update_cnt % self.target_update == 0:
                     self._target_hard_update()
+                    # checkpointing of target model (only if the loss decrease)
+                    self.checkpoint_manager.save()
+
 
         self.env.close()
 
@@ -462,5 +483,5 @@ class RainbowAgent:
 
     def _target_hard_update(self):
         """Hard update: target <- local."""
-        tf.saved_model.save(self.dqn, "dqn")
-        self.dqn_target = tf.saved_model.load("dqn")
+        tf.saved_model.save(self.dqn, "single_joint_dqn")
+        self.dqn_target = tf.saved_model.load("single_joint_dqn")
