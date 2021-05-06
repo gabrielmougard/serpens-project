@@ -1,9 +1,7 @@
 rospkg
 matplotlib
 numpy
-tensorflow
-tensorflow-gpu
-tensorflow-addons
+torch
 gym
 tqdm
 cpprb
