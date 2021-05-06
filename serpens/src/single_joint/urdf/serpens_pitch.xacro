@@ -1,0 +1,250 @@
+<?xml version='1.0' encoding='UTF-8'?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="serpens_model">
+<!-- Width, height, depth, mass -->
+    <xacro:property name="w" value="0.0765"/>
+    <xacro:property name="h" value="0.080"/>
+    <xacro:property name="d" value="0.0050"/>
+    <xacro:property name="m" value="0.22703"/>
+<!-- Friction coefficients along each axis of the surface -->
+    <xacro:property name="mu1" value="0.75"/>
+    <xacro:property name="mu2" value="0.75"/>
+    <xacro:property name="fdir1" value="0 0 0"/>
+
+    <xacro:property name="disp_coeff" value="0.0075"/>
+
+    <xacro:property name="displacement_0" value="0 0 0"/>
+    <xacro:property name="displacement" value="0 ${disp_coeff} 0"/>
+    <xacro:property name="displacement_2" value="0 ${2 * disp_coeff} 0"/>
+
+    <xacro:property name="yaw_axis" value="0 0 1"/>
+    <xacro:property name="pitch_axis" value="0 0 1"/>
+
+    <xacro:property name="col_rpy" value="0 0 0"/>
+    
+    <!--Macro for building X amount of links-->
+    <xacro:macro name="generic_link" params="suffix displacement">
+        <!-- Describe one of the joints -->
+        <link name="serpens_link_${suffix}">
+            <visual>
+                <origin rpy="${col_rpy}" xyz="${displacement}"/>
+                <geometry>
+                    <mesh filename="$(find single_joint)/meshes/generic_yaw.STL"/>
+                </geometry>
+            </visual>
+            
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.04 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            <!--
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.055 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            -->
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.07 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            <!--
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.085 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            -->
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.1 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            <!--
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.115 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            -->
+            <collision>
+                <origin rpy="${col_rpy}" xyz="0 0.130 -0.0125"/>
+                <geometry>
+                    <box size="${w} ${d / 2} ${h}"/>
+                </geometry>
+            </collision>
+            
+            <inertial>
+                <!-- Why not col_rpy for rpy? -->
+                <origin rpy="0 0 0" xyz="${displacement}"/>
+                <mass value="${m}"/>
+                <inertia ixx="0" ixy="0" ixz="0"
+                         iyy="0" iyz="0" izz="0"/>
+                
+                <!-- Theoric inertia tensor for solid cuboid, removed for some reason, to be tested -->
+                <!--
+                <inertia ixx="${(1 / 12) * m * ((h * h) + (d * d))}" ixy="0" ixz="0"
+                         iyy="${(1 / 12) * m * ((w * w) + (d * d))}" iyz="0" izz="${(1 / 12) * m * ((w * w) + (h * h))}"/>
+                -->
+            </inertial>
+        </link>
+
+        
+        <gazebo reference="serpens_link_${suffix}">
+            <selfCollide>true</selfCollide>
+            <mu1>${mu1}</mu1>
+            <mu2>${mu2}</mu2>
+            <fdir1>${fdir1}</fdir1>
+        </gazebo>
+    </xacro:macro>
+
+
+    <!--Macro for building X amount of joints-->
+    <xacro:macro name="generic_joint" params="suffix displacement axis">
+        <!-- Revolute means hinge with limit values -->
+        <joint name="joint_${suffix}_motor" type="revolute">
+            <axis xyz="${axis}"/>
+            <!-- +-90° for our joint  -->
+            <limit effort="60" lower="-1.498" upper="1.498" velocity="15"/>
+            <origin rpy="0 0 0" xyz="${displacement}"/>
+            <parent link="serpens_link_${suffix}"/>
+            <child link="serpens_link_${suffix + 1}"/>
+        </joint>
+        <gazebo reference="joint_${suffix}_motor"/>
+        <!-- transmission describes relationship between motor(actuator) and joint -->
+        <transmission name="motor_${suffix}_tran">
+            <type>transmission_interface/SimpleTransmission</type>
+            <joint name="joint_${suffix}_motor">
+                <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+            </joint>
+            <actuator name="motor_${suffix}">
+                <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+                <mechanicalReduction>1</mechanicalReduction>
+            </actuator>
+        </transmission>
+    </xacro:macro>
+
+    <link name="base"/>
+
+    <joint name="fixed" type="fixed">
+        <parent link="base"/>
+        <child link="serpens_link_1"/>
+    </joint>
+
+    <link name="serpens_link_1">
+        <visual>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <geometry>
+                <mesh filename="$(find single_joint)/meshes/generic_yaw.STL"/>
+            </geometry>
+        </visual>
+
+        <collision>
+            <!---0.1075-->
+            <origin rpy="0 0 0" xyz="0 0 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+        <!--
+        <collision>
+
+            <origin rpy="0 0 0" xyz="0 0.015 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+        -->
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0.030 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+        <!--
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0.045 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+        -->
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0.060 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+        <!--
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0.075 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+        -->
+        <collision>
+            <origin rpy="0 0 0" xyz="0 0.09 -0.1075"/>
+            <geometry>
+                <box size="${w} ${d / 2} ${h}"/>
+            </geometry>
+        </collision>
+
+        
+        <inertial>
+            <origin rpy="0 0 0" xyz="0 0 0"/>
+            <mass value="${m}"/>
+            <inertia ixx="0" ixy="0" ixz="0"
+                     iyy="0" iyz="0" izz="0"/>
+            <!--
+            <inertia ixx="${(1 / 12) * m * ((h * h) + (d * d))}" ixy="0" ixz="0"
+                     iyy="${(1 / 12) * m * ((w * w) + (d * d))}" iyz="0" izz="${(1 / 12) * m * ((w * w) + (h * h))}"/>
+            -->
+        </inertial>
+    </link>
+
+    <gazebo reference="serpens_link__1">
+        <selfCollide>true</selfCollide>
+        <mu1>${mu1}</mu1>
+        <mu2>${mu2}</mu2>
+        <fdir1>${fdir1}</fdir1>
+    </gazebo>
+
+    <xacro:generic_link suffix="2" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="3" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="4" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="5" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="6" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="7" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="8" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="9" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="10" displacement="0 0.0415 0.095"/>
+    <xacro:generic_link suffix="11" displacement="0 0.0415 0.095"/>
+
+    <xacro:generic_joint suffix="1" displacement="0 0.14375 -0.095" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="2" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="3" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="4" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="5" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="6" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="7" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="8" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="9" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+    <xacro:generic_joint suffix="10" displacement="0 0.18590 0" axis="${pitch_axis}"/>
+
+
+    <gazebo>
+        <plugin filename="libgazebo_ros_control.so" name="gazebo_ros_control">
+            <robotNamespace>/</robotNamespace>
+            <robotSimType>gazebo_ros_control/DefaultRobotHWSim</robotSimType>
+        </plugin>
+    </gazebo>
+</robot>

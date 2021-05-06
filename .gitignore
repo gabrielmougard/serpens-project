@@ -1,6 +1,9 @@
 # The python virtualenv
 serpens-venv/*
 
+#vscode config
+serpens/src/single_joint/.vscode/*
+
 # The notebooks checkpoints
 .ipynb_checkpoints/*
 
@@ -31,3 +34,10 @@ serpens/src/single_joint/scripts/logs/*
 
 # utility script for downloading metrics to local machine
 tensorboard_download.sh
+
+#local try for spawning mechanical design joint 
+serpens/src/single_joint/urdf/snake_joint_design_v1_world.xacro
+serpens/src/single_joint/urdf/snake_joint_design_v1.gazebo
+serpens/src/single_joint/urdf/snake_joint_design_v1.xacro
+serpens/src/single_joint/launch/snake_joint_design_v1_gazebo.launch
+serpens/src/single_joint/config/snake_joint_design_v1_control.yaml

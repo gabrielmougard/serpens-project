@@ -1,0 +1,46 @@
+joint_1_motor:
+  joint: joint_1_motor
+  pid: &id001
+    d: 10
+    i: 1
+    p: 1000
+  type: effort_controllers/JointPositionController
+joint_2_motor:
+  joint: joint_2_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_3_motor:
+  joint: joint_3_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_4_motor:
+  joint: joint_4_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_5_motor:
+  joint: joint_5_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_6_motor:
+  joint: joint_6_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_7_motor:
+  joint: joint_7_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_8_motor:
+  joint: joint_8_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_9_motor:
+  joint: joint_9_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_10_motor:
+  joint: joint_10_motor
+  pid: *id001
+  type: effort_controllers/JointPositionController
+joint_state_controller:
+  publish_rate: 200
+  type: joint_state_controller/JointStateController
