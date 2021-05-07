@@ -196,7 +196,6 @@ class SnakeJoint(gym.Env):
         self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
         self.previous_epsilon = None
         self.steps_beyond_done = None
-        self.torque = 0.0
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
         self.torque_pub.publish(joint_value) 

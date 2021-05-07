@@ -1,5 +1,3 @@
-from pympler.tracker import SummaryTracker
-
 from tqdm import tqdm
 from datetime import datetime
 from typing import Dict, List, Tuple

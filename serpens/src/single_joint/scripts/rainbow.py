@@ -55,4 +55,4 @@ if __name__ == "__main__":
         model_name
     )
 
-    agent.train(2000)
+    agent.train(num_frames)
