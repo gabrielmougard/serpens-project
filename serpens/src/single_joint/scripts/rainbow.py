@@ -6,7 +6,7 @@ The main function for the Reinforcement training node.
 
 import rospy
 
-from rainbow.agent import RainbowAgent
+from rainbowv2.agent import RainbowAgent
 from gzactuator.joint_env import SnakeJoint 
 
 if __name__ == "__main__":

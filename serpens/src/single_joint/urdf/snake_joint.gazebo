@@ -6,7 +6,7 @@
     </gazebo>
 
     <gazebo reference="fixated_link">
-        <selfCollide>true</selfCollide>
+        <selfCollide>false</selfCollide>
     </gazebo>
 
     <gazebo reference="fixated_to_pivot">

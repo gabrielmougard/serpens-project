@@ -1,0 +1,36 @@
+<launch>
+    <arg default="true" name="verbose"/>
+    <arg default="true" name="gui"/>
+    <arg default="false" name="paused"/>
+    <arg default="false" name="headless"/>
+    <arg default="true" name="use_sim_time"/>
+    <arg default="false" name="debug"/>
+    <arg default="ode" name="physics"/>
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find single_joint)/worlds/default.world"/>
+        <arg name="verbose" value="$(arg verbose)"/>
+        <arg name="gui" value="$(arg gui)"/>
+        <arg name="paused" value="$(arg paused)"/>
+        <arg name="headless" value="$(arg headless)"/>
+        <arg name="use_sim_time" value="$(arg use_sim_time)"/>
+        <arg name="debug" value="$(arg debug)"/>
+        <arg name="physics" value="$(arg physics)"/>
+    </include>
+
+    <param command="$(find xacro)/xacro --inorder '$(find single_joint)/urdf/serpens_pitch.xacro'"
+           name="robot_description"/>
+
+    <node args="-urdf -model msd_world -param robot_description" name="urdf_spawner" output="screen" pkg="gazebo_ros"
+          respawn="false" type="spawn_model"/>
+
+    <rosparam command="load" file="$(find single_joint)/config/serpens_pitch.yaml"/>
+    <node args="joint_state_controller joint_1_motor
+                joint_2_motor joint_3_motor joint_4_motor
+                joint_5_motor joint_6_motor
+                joint_7_motor joint_8_motor
+                joint_9_motor joint_10_motor"
+          name="controller_spawner" ns="/single_joint" output="screen" pkg="controller_manager" respawn="false" type="spawner"/>
+
+    <node name="robot_state_publisher" output="screen" pkg="robot_state_publisher" respawn="false"
+          type="robot_state_publisher"/>
+</launch>

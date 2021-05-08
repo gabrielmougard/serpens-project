@@ -1,5 +1,5 @@
 import sys
-
+from sys import getsizeof
 import gym
 from gym import spaces
 from gym.utils import seeding
@@ -108,7 +108,7 @@ class SnakeJoint(gym.Env):
 
     def _is_done(self, observation):
         done = bool(
-            observation[6] > self.max_allowed_epsilon or
+            #observation[6] > self.max_allowed_epsilon or
             abs(observation[7]) < self.min_allowed_epsilon_p
         )
         return done
@@ -177,8 +177,12 @@ class SnakeJoint(gym.Env):
         done = self._is_done(obs)
         reward = self._compute_reward(obs, done)
         info = {}
-
         return obs, reward, done, info
+
+
+
+    # def step(self, action):
+    #     return list(np.random.uniform(-1, 1, 8)), 1.0, False, {}
 
 
     def reset(self):
@@ -188,10 +192,10 @@ class SnakeJoint(gym.Env):
         self.iterator = 0
 
         self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
         self.previous_epsilon = None
         self.steps_beyond_done = None
-        self.torque = 0.0
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
         self.torque_pub.publish(joint_value) 

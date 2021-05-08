@@ -4,109 +4,40 @@
 #
 #    pip-compile requirements/base.in
 #
-absl-py==0.11.0
-    # via
-    #   tensorboard
-    #   tensorflow
-    #   tensorflow-gpu
-astunparse==1.6.3
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-cachetools==4.2.1
-    # via google-auth
 catkin-pkg==0.4.23
     # via rospkg
-certifi==2020.12.5
-    # via requests
-chardet==4.0.0
-    # via requests
 cloudpickle==1.6.0
     # via gym
+cpprb==10.1.0
+    # via -r requirements/base.in
 cycler==0.10.0
     # via matplotlib
+dataclasses==0.8
+    # via torch
 distro==1.5.0
     # via rospkg
 docutils==0.17
     # via catkin-pkg
-flatbuffers==1.12
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
 future==0.18.2
     # via pyglet
-gast==0.3.3
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-google-auth-oauthlib==0.4.2
-    # via tensorboard
-google-auth==1.27.0
-    # via
-    #   google-auth-oauthlib
-    #   tensorboard
-google-pasta==0.2.0
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-grpcio==1.32.0
-    # via
-    #   tensorboard
-    #   tensorflow
-    #   tensorflow-gpu
 gym==0.18.0
     # via -r requirements/base.in
-h5py==2.10.0
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-idna==2.10
-    # via requests
-importlib-metadata==3.7.3
-    # via markdown
-keras-preprocessing==1.1.2
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
 kiwisolver==1.3.1
     # via matplotlib
-markdown==3.3.4
-    # via tensorboard
 matplotlib==3.3.4
     # via -r requirements/base.in
 numpy==1.19.5
     # via
     #   -r requirements/base.in
+    #   cpprb
     #   gym
-    #   h5py
-    #   keras-preprocessing
     #   matplotlib
-    #   opt-einsum
     #   scipy
-    #   tensorboard
-    #   tensorflow
-    #   tensorflow-gpu
-oauthlib==3.1.0
-    # via requests-oauthlib
-opt-einsum==3.3.0
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
+    #   torch
 pillow==7.2.0
     # via
     #   gym
     #   matplotlib
-protobuf==3.15.3
-    # via
-    #   tensorboard
-    #   tensorflow
-    #   tensorflow-gpu
-pyasn1-modules==0.2.8
-    # via google-auth
-pyasn1==0.4.8
-    # via
-    #   pyasn1-modules
-    #   rsa
 pyglet==1.5.0
     # via gym
 pyparsing==2.4.7
@@ -119,78 +50,17 @@ python-dateutil==2.8.1
     #   matplotlib
 pyyaml==5.4.1
     # via rospkg
-requests-oauthlib==1.3.0
-    # via google-auth-oauthlib
-requests==2.25.1
-    # via
-    #   requests-oauthlib
-    #   tensorboard
 rospkg==1.3.0
     # via -r requirements/base.in
-rsa==4.7.2
-    # via google-auth
 scipy==1.5.4
     # via gym
 six==1.15.0
     # via
-    #   absl-py
-    #   astunparse
     #   cycler
-    #   google-auth
-    #   google-pasta
-    #   grpcio
-    #   h5py
-    #   keras-preprocessing
-    #   protobuf
     #   python-dateutil
-    #   tensorboard
-    #   tensorflow
-    #   tensorflow-gpu
-tensorboard-plugin-wit==1.8.0
-    # via tensorboard
-tensorboard==2.4.1
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-tensorflow-addons==0.12.1
+torch==1.8.1
     # via -r requirements/base.in
-tensorflow-estimator==2.4.0
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-tensorflow-gpu==2.4.1
-    # via -r requirements/base.in
-tensorflow==2.4.0
-    # via -r requirements/base.in
-termcolor==1.1.0
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
 tqdm==4.60.0
     # via -r requirements/base.in
-typeguard==2.12.0
-    # via tensorflow-addons
 typing-extensions==3.7.4.3
-    # via
-    #   importlib-metadata
-    #   tensorflow
-    #   tensorflow-gpu
-urllib3==1.26.3
-    # via requests
-werkzeug==1.0.1
-    # via tensorboard
-wheel==0.36.2
-    # via
-    #   astunparse
-    #   tensorboard
-    #   tensorflow
-    #   tensorflow-gpu
-wrapt==1.12.1
-    # via
-    #   tensorflow
-    #   tensorflow-gpu
-zipp==3.4.1
-    # via importlib-metadata
-
-# The following packages are considered to be unsafe in a requirements file:
-# setuptools
+    # via torch
