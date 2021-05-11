@@ -30,9 +30,17 @@ class SnakeJoint(gym.Env):
         self.max_allowed_epsilon =  rospy.get_param('/rainbow/max_allowed_epsilon')
         self.max_ep_length =  rospy.get_param('/rainbow/max_ep_length')
         self.min_allowed_epsilon_p =  rospy.get_param('/rainbow/min_allowed_epsilon_p')
+        self.max_time_episode = rospy.get_param('/rainbow/max_time_episode')
+        self.angle_stability_criterion = rospy.get_param('/rainbow/angle_stability_criterion')
+        self.load_speed_criterion = rospy.get_param('/rainbow/load_speed_criterion')
 
         # publishers and subscribers
         self.torque_pub = rospy.Publisher('/single_joint/link_motor_effort/command', Float64, queue_size=10)
+        #For rqt plotting
+        self.error_pub = rospy.Publisher('/single_joint/rqt/error', Float64, queue_size=10)
+        self.theta_ld_pub = rospy.Publisher('/single_joint/rqt/thetald', Float64, queue_size=10)
+
+
         rospy.Subscriber('/single_joint/joint_states', JointState, self.observation_callback)
 
         self.action_space = spaces.Discrete(self.n_actions)
@@ -56,7 +64,7 @@ class SnakeJoint(gym.Env):
 
         self.seed()
         # start the environment server at a refreshing rate of 10Hz
-        self.rate = rospy.Rate(10)
+        self.rate = rospy.Rate(0.1)
 
 
     def seed(self, seed=5048795115606990371):
@@ -103,6 +111,9 @@ class SnakeJoint(gym.Env):
         #self._observation_msg = None
         # update self.previous_epsilon for the next times
         self.previous_epsilon = epsilon
+
+        #TODO publish epsilon to a new channel/publish the data in obs to new channel(s)
+
         return np.array(obs)
 
 
@@ -166,17 +177,77 @@ class SnakeJoint(gym.Env):
             self.current_torque += self.torque_step * 50
         
         
+        
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
         self.torque_pub.publish(joint_value) 
 
+        #TODO wait for the joint to stop moving, blocking learning.
+        
+        #self.rate.sleep()
+
         self.ros_clock = rospy.get_rostime().nsecs
 
-        # Take an observation
         obs = self.take_observation()
+
+        t_start_episode=rospy.get_rostime().nsecs 
+        t_end_episode=t_start_episode+self.max_time_episode
+        """
+        rospy.loginfo(str("start" + str(t_start_episode)))
+        rospy.loginfo(str("end"+str(t_end_episode)))
+        """
+        
+        #We give a maximum time for the joint to reach the desired position
+        iteration=0
+        rospy.loginfo(rospy.get_rostime().nsecs)
+        rospy.loginfo(str("start" + str(t_start_episode)))
+        while  rospy.get_rostime().nsecs < t_end_episode:
+            obs = self.take_observation()
+            #rospy.loginfo(str(rospy.get_rostime().nsecs) + " " + str(t_end_episode))
+            iteration=iteration+1
+            #V1 : instantaneous speed
+            #rospy.loginfo(str(obs[2]))
+            if abs(obs[2])<self.load_speed_criterion:
+                #If the speed is low, we check if it stays low for a while. 
+                is_stable=True
+                rospy.loginfo("checking stability...")
+                for i in range (0,400):
+                    obs = self.take_observation()
+                    if abs(obs[2]) > self.load_speed_criterion:
+                        is_stable=False
+                        break
+
+                #If the speed has been bellow criterion for a while, we consider equilibrium.         
+                if is_stable:
+                    rospy.loginfo(str("criterion met, speed = " + str(obs[2])))
+                    break
+
+                        
+        rospy.loginfo("t= " + str(rospy.get_rostime().nsecs) + " exited while after " + str(iteration) + " iterations, theta_ld= " + str(obs[6]) + " final angle = " + str(obs[2]) + " action = " + str(action))
+
+          
+        #While with 2 conditions: not moving or took too long. 
+        #While temps< CRITERE TEMPS
+            #X éléments (10) [] remplie de vitesses instantannées
+            #Moyenne
+            #
+            #If moyenne<Critère de vitesse 
+                #
+        
+            #V2 
+            #X éléments remplie de positions 
+            #Diff entre plus grand et petis<critère
+            #   On est bon return  
+
+
+        # Take an observation
+        
         done = self._is_done(obs)
         reward = self._compute_reward(obs, done)
         info = {}
+
+        self.rqt_publishing(obs)
+
         return obs, reward, done, info
 
 
@@ -202,7 +273,26 @@ class SnakeJoint(gym.Env):
         self.ros_clock = rospy.get_rostime().nsecs
         obs = self.take_observation()
 
+        
+
         return obs
+
+    def rqt_publishing(self,obs):
+        """
+        Will publish epsilon ant thetald to relevant channels for plotting
+        """
+        
+        #For epsilon
+        error = Float64()
+        #Take epsilon from obs WARNING: refers to a static index in obs
+        error.data = obs[6]
+        self.error_pub.publish(error) 
+
+        #For theta_ld
+        theta_ld = Float64()
+        #Take theta_ld from obs WARNING: refers to a static index in obs
+        error.data = obs[0]
+        self.theta_ld_pub.publish(theta_ld) 
 
 
     def close(self):
