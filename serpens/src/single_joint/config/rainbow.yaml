@@ -32,9 +32,4 @@ rainbow:
   max_allowed_epsilon: 0.8726 # 50 deg
   min_allowed_epsilon_p: 0.0000000001 # 1e-10
   max_ep_length: 200
-  #The max time we leave for the joint to reach the goal in nanoseconds
-  max_time_episode: 50000000
-  #The criterion for stability of the joint position in radians, about 1°
-  angle_stability_criterion: 0.02
-  #The speed in rad/s bellow which we consider that the load is at the equilibrium 
-  load_speed_criterion: 0.00000000001
+

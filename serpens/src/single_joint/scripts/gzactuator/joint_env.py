@@ -7,6 +7,8 @@ import rospy
 from sensor_msgs.msg import JointState
 from std_msgs.msg import Float64
 import numpy as np
+import time
+from std_srvs.srv import Empty
 
 
 class SnakeJoint(gym.Env):
@@ -39,7 +41,8 @@ class SnakeJoint(gym.Env):
         #For rqt plotting
         self.error_pub = rospy.Publisher('/single_joint/rqt/error', Float64, queue_size=10)
         self.theta_ld_pub = rospy.Publisher('/single_joint/rqt/thetald', Float64, queue_size=10)
-
+        self.unpause = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
+        self.pause = rospy.ServiceProxy('/gazebo/pause_physics', Empty)
 
         rospy.Subscriber('/single_joint/joint_states', JointState, self.observation_callback)
 
@@ -64,7 +67,7 @@ class SnakeJoint(gym.Env):
 
         self.seed()
         # start the environment server at a refreshing rate of 10Hz
-        self.rate = rospy.Rate(0.1)
+        self.rate = rospy.Rate(10)
 
 
     def seed(self, seed=5048795115606990371):
@@ -87,13 +90,15 @@ class SnakeJoint(gym.Env):
         obs_message = self._observation_msg
         # Check that the observation is not prior to the action
         # obs_message = self._observation_msg
-        try:
-            while obs_message is None or int(str(self._observation_msg.header.stamp.secs)+(str(self._observation_msg.header.stamp.nsecs))) < self.ros_clock:
-                rospy.loginfo("I am in obs_message is none")
-                obs_message = self._observation_msg
-                self.rate.sleep()
-        except rospy.ROSInterruptException:
-            sys.exit(1)
+        
+        if obs_message is None: 
+            while obs_message is None:
+                try:
+                    obs_message=rospy.wait_for_message('/single_joint/joint_states', JointState, timeout=5)
+                except rospy.ROSInterruptException:
+                    rospy.loginfo("jointStates failure")
+                    sys.exit(1)
+
 
         epsilon = abs(self.episode_theta_ld - obs_message.position[1])
         obs = [
@@ -117,11 +122,8 @@ class SnakeJoint(gym.Env):
         return np.array(obs)
 
 
-    def _is_done(self, observation):
-        done = bool(
-            #observation[6] > self.max_allowed_epsilon or
-            abs(observation[7]) < self.min_allowed_epsilon_p
-        )
+    def _is_done(self, observation,score):
+        done = bool(abs(observation[7]) < self.min_allowed_epsilon_p) or bool(score > 200)
         return done
 
 
@@ -143,7 +145,7 @@ class SnakeJoint(gym.Env):
         return reward
 
 
-    def step(self, action):
+    def step(self, action,score):
         """
         Function executed each time step.
         Here we get the action execute it in a time step and retrieve the
@@ -156,6 +158,13 @@ class SnakeJoint(gym.Env):
         Here we should convert the action num to movement action, execute the action in the
         simulation and get the observations result of performing that action.
         """
+
+        rospy.wait_for_service('/gazebo/unpause_physics')
+        try:
+            self.unpause()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("rosunpause failed!")
+
         self.iterator+=1
         # Execute "action"
         # Take action
@@ -176,54 +185,51 @@ class SnakeJoint(gym.Env):
         elif action == 7: # increase torque with very large step
             self.current_torque += self.torque_step * 50
         
-        
-        
+
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
         self.torque_pub.publish(joint_value) 
 
-        #TODO wait for the joint to stop moving, blocking learning.
-        
-        #self.rate.sleep()
-
         self.ros_clock = rospy.get_rostime().nsecs
 
         obs = self.take_observation()
-
-        t_start_episode=rospy.get_rostime().nsecs 
-        t_end_episode=t_start_episode+self.max_time_episode
         """
-        rospy.loginfo(str("start" + str(t_start_episode)))
-        rospy.loginfo(str("end"+str(t_end_episode)))
+        t_start_episode=time.time()
+        t_end_episode=t_start_episode+self.max_time_episode
+        
+        #rospy.loginfo(str("start" + str(t_start_episode)))
+        """
         """
         
         #We give a maximum time for the joint to reach the desired position
         iteration=0
-        rospy.loginfo(rospy.get_rostime().nsecs)
-        rospy.loginfo(str("start" + str(t_start_episode)))
-        while  rospy.get_rostime().nsecs < t_end_episode:
+        #rospy.loginfo(str("start = " + str(t_start_episode) + " end = " + str(t_end_episode)))
+        while  time.time() < t_end_episode:
             obs = self.take_observation()
             #rospy.loginfo(str(rospy.get_rostime().nsecs) + " " + str(t_end_episode))
+            self.rqt_publishing(obs)
             iteration=iteration+1
             #V1 : instantaneous speed
             #rospy.loginfo(str(obs[2]))
             if abs(obs[2])<self.load_speed_criterion:
                 #If the speed is low, we check if it stays low for a while. 
                 is_stable=True
-                rospy.loginfo("checking stability...")
-                for i in range (0,400):
+                #rospy.loginfo("checking stability...")
+                check_rate = rospy.Rate(50)
+                for i in range (0,100):
                     obs = self.take_observation()
+                    self.rqt_publishing(obs)
                     if abs(obs[2]) > self.load_speed_criterion:
                         is_stable=False
                         break
-
+                    check_rate.sleep()
                 #If the speed has been bellow criterion for a while, we consider equilibrium.         
                 if is_stable:
-                    rospy.loginfo(str("criterion met, speed = " + str(obs[2])))
+                    #rospy.loginfo(str("criterion met, speed = " + str(obs[2])))
                     break
 
                         
-        rospy.loginfo("t= " + str(rospy.get_rostime().nsecs) + " exited while after " + str(iteration) + " iterations, theta_ld= " + str(obs[6]) + " final angle = " + str(obs[2]) + " action = " + str(action))
+        #rospy.loginfo("t= " + str(rospy.get_rostime().nsecs) + " exited while after " + str(iteration) + " iterations, theta_ld= " + str(obs[6]) + " final angle = " + str(obs[2]) + " action = " + str(action))
 
           
         #While with 2 conditions: not moving or took too long. 
@@ -241,12 +247,17 @@ class SnakeJoint(gym.Env):
 
 
         # Take an observation
-        
-        done = self._is_done(obs)
+        """
+        done = self._is_done(obs,score)
         reward = self._compute_reward(obs, done)
         info = {}
 
         self.rqt_publishing(obs)
+        
+        self.rate.sleep()
+        
+        if done:
+            rospy.loginfo(str("episode done, score = " + str(score)))
 
         return obs, reward, done, info
 
@@ -261,6 +272,12 @@ class SnakeJoint(gym.Env):
         Reset the agent for a particular experiment condition.
         """
         self.iterator = 0
+
+        rospy.wait_for_service('/gazebo/pause_physics')
+        try:
+            self.pause()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("rospause failed!")
 
         self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
@@ -291,7 +308,7 @@ class SnakeJoint(gym.Env):
         #For theta_ld
         theta_ld = Float64()
         #Take theta_ld from obs WARNING: refers to a static index in obs
-        error.data = obs[0]
+        theta_ld.data = obs[0]
         self.theta_ld_pub.publish(theta_ld) 
 
 
