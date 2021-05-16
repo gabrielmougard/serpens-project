@@ -14,6 +14,7 @@ from torch.nn.utils import clip_grad_norm_
 from rainbowv2.network import Network
 #from rainbow.tensorboard import RainbowTensorBoard
 from cpprb import ReplayBuffer, PrioritizedReplayBuffer
+import time
 
 
 class RainbowAgent:
@@ -194,9 +195,9 @@ class RainbowAgent:
         return selected_action
 
 
-    def step(self, action: np.ndarray) -> Tuple[np.ndarray, np.float64, bool]:
+    def step(self, action: np.ndarray, score:int) -> Tuple[np.ndarray, np.float64, bool]:
         """Take an action and return the response of the env."""
-        next_state, reward, done, _ = self.env.step(action)
+        next_state, reward, done, _ = self.env.step(action,score)
 
         if not self.is_test:
             self.transition += [reward, next_state, done]
@@ -282,7 +283,7 @@ class RainbowAgent:
         for frame_idx in tqdm(range(1, num_frames + 1)):
 
             action = self.select_action(state)
-            next_state, reward, done = self.step(action)
+            next_state, reward, done = self.step(action,score)
 
             state = next_state
             score += reward
@@ -386,4 +387,5 @@ class RainbowAgent:
     def _target_hard_update(self):
         """Hard update: target <- local."""
         self.dqn_target.load_state_dict(self.dqn.state_dict())
+        torch.save(self.dqn.state_dict(),str("checkpoint_"+str(time.time())))
 

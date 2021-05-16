@@ -1,11 +1,12 @@
 <launch>
     <arg name="paused" default="false"/>
     <arg name="use_sim_time" default="true"/>
-    <arg name="gui" default="false"/>
+    <arg name="gui" default="true"/>
     <arg name="headless" default="false"/>
     <arg name="debug" default="false"/>
 
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="world_name" value="$(find single_joint)/worlds/default.world"/>
         <arg name="debug" value="$(arg debug)" />
         <arg name="gui" value="$(arg gui)" />
         <arg name="paused" value="$(arg paused)"/>
@@ -35,4 +36,6 @@
     <rosparam file="$(find single_joint)/config/rainbow.yaml" />
     <node pkg="single_joint" type="rainbow.py" name="rainbow"  output="screen"></node>
 
+    <!--<node pkg="rqt_plot" type="rqt_plot" name="rqt" args="rqt_plot /single_joint/rqt/error"/>
+-->
 </launch>
