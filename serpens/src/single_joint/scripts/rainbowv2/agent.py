@@ -240,6 +240,7 @@ class RainbowAgent:
         
         # PER: importance sampling before average
         loss = torch.mean(elementwise_loss * weights)
+        #TODO
         
         # N-step Learning loss
         # we are gonna combine 1-step loss and n-step loss so as to
@@ -252,6 +253,7 @@ class RainbowAgent:
             
             # PER: importance sampling before average
             loss = torch.mean(elementwise_loss * weights)
+            #TODO
 
         self.optimizer.zero_grad()
         loss.backward()
@@ -303,6 +305,7 @@ class RainbowAgent:
             # if training is ready
             if self.memory.get_stored_size() >= self.batch_size:
                 loss = self.update_model()
+                #TODO
                 losses.append(loss)
                 update_cnt += 1
                 
