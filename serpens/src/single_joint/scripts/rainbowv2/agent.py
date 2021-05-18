@@ -15,6 +15,7 @@ from rainbowv2.network import Network
 #from rainbow.tensorboard import RainbowTensorBoard
 from cpprb import ReplayBuffer, PrioritizedReplayBuffer
 import time
+from torch.utils.tensorboard import SummaryWriter
 
 
 class RainbowAgent:
@@ -65,6 +66,7 @@ class RainbowAgent:
         convergence_avg_epsilon_p: float = 0.0174, # 1 deg/s converted to rad/s
         # Tensorboard parameters
         model_name: str = "snake_joint",
+
     ):
         """Initialization.
         
@@ -91,7 +93,21 @@ class RainbowAgent:
         self.target_update = target_update
         self.gamma = gamma
         # NoisyNet: All attributes related to epsilon are removed
-        
+
+        #produces a unique timestamp for each run 
+        run_timestamp=str(
+        #returns number of day and number of month
+        str(time.localtime(time.time())[2]) + "_" +
+        str(time.localtime(time.time())[1]) + "_" +
+        #returns hour, minute and second
+        str(time.localtime(time.time())[3]) + "_" +
+        str(time.localtime(time.time())[4]) + "_" +
+        str(time.localtime(time.time())[5])
+        )
+
+        #Will write scalars that can be visualized using tensorboard in the directory "runLogs/timestamp"
+        self.writer = SummaryWriter("runLogs/" + run_timestamp)
+
         # device: cpu / gpu
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -176,9 +192,6 @@ class RainbowAgent:
         self.convergence_avg_epsilon = convergence_avg_epsilon
         self.convergence_avg_epsilon_p = convergence_avg_epsilon_p
 
-        # model checkpoint object 
-        # TODO
-
 
     def select_action(self, state: np.ndarray) -> np.ndarray:
         """Select an action from the input state."""
@@ -192,6 +205,7 @@ class RainbowAgent:
 
             self.transition = [state, selected_action]
         
+
         return selected_action
 
 
@@ -240,6 +254,7 @@ class RainbowAgent:
         
         # PER: importance sampling before average
         loss = torch.mean(elementwise_loss * weights)
+        
         #TODO
         
         # N-step Learning loss
@@ -306,6 +321,7 @@ class RainbowAgent:
             if self.memory.get_stored_size() >= self.batch_size:
                 loss = self.update_model()
                 #TODO
+
                 losses.append(loss)
                 update_cnt += 1
                 
@@ -383,6 +399,7 @@ class RainbowAgent:
         dist = self.dqn.dist(state)
         log_p = torch.log(dist[range(self.batch_size), action])
         elementwise_loss = -(proj_dist * log_p).sum(1)
+
 
         return elementwise_loss
 

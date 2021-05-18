@@ -9,6 +9,7 @@ from std_msgs.msg import Float64
 import numpy as np
 import time
 from std_srvs.srv import Empty
+from gazebo_msgs.srv import SetModelConfiguration
 
 
 class SnakeJoint(gym.Env):
@@ -32,21 +33,23 @@ class SnakeJoint(gym.Env):
         self.max_allowed_epsilon =  rospy.get_param('/rainbow/max_allowed_epsilon')
         self.max_ep_length =  rospy.get_param('/rainbow/max_ep_length')
         self.min_allowed_epsilon_p =  rospy.get_param('/rainbow/min_allowed_epsilon_p')
-        self.max_time_episode = rospy.get_param('/rainbow/max_time_episode')
-        self.angle_stability_criterion = rospy.get_param('/rainbow/angle_stability_criterion')
-        self.load_speed_criterion = rospy.get_param('/rainbow/load_speed_criterion')
 
         # publishers and subscribers
         self.torque_pub = rospy.Publisher('/single_joint/link_motor_effort/command', Float64, queue_size=10)
         #For rqt plotting
         self.error_pub = rospy.Publisher('/single_joint/rqt/error', Float64, queue_size=10)
         self.theta_ld_pub = rospy.Publisher('/single_joint/rqt/thetald', Float64, queue_size=10)
+        #Allows us to pause or unpause the physics engine, stopping or resuming movement instantly 
         self.unpause = rospy.ServiceProxy('/gazebo/unpause_physics', Empty)
         self.pause = rospy.ServiceProxy('/gazebo/pause_physics', Empty)
+        #Resets model poses
+        self.reset_world = rospy.ServiceProxy('/gazebo/reset_world', Empty)
+        self.reset_joints = rospy.ServiceProxy('/gazebo/set_model_configuration', SetModelConfiguration)
 
         rospy.Subscriber('/single_joint/joint_states', JointState, self.observation_callback)
 
         self.action_space = spaces.Discrete(self.n_actions)
+        self.stability_iterator=0
 
         boundaries = np.array([
             self.theta_ld_max,
@@ -101,6 +104,8 @@ class SnakeJoint(gym.Env):
 
 
         epsilon = abs(self.episode_theta_ld - obs_message.position[1])
+        #rospy.loginfo("epsilon= "+ str(epsilon) + " previous_epsilon = "+ (str(self.previous_epsilon) if self.previous_epsilon else "not yet") )
+        
         obs = [
             self.episode_theta_ld,
             obs_message.position[1], # theta_l
@@ -117,12 +122,12 @@ class SnakeJoint(gym.Env):
         # update self.previous_epsilon for the next times
         self.previous_epsilon = epsilon
 
-        #TODO publish epsilon to a new channel/publish the data in obs to new channel(s)
 
         return np.array(obs)
 
 
     def _is_done(self, observation,score):
+
         done = bool(abs(observation[7]) < self.min_allowed_epsilon_p) or bool(score > 200)
         return done
 
@@ -193,61 +198,6 @@ class SnakeJoint(gym.Env):
         self.ros_clock = rospy.get_rostime().nsecs
 
         obs = self.take_observation()
-        """
-        t_start_episode=time.time()
-        t_end_episode=t_start_episode+self.max_time_episode
-        
-        #rospy.loginfo(str("start" + str(t_start_episode)))
-        """
-        """
-        
-        #We give a maximum time for the joint to reach the desired position
-        iteration=0
-        #rospy.loginfo(str("start = " + str(t_start_episode) + " end = " + str(t_end_episode)))
-        while  time.time() < t_end_episode:
-            obs = self.take_observation()
-            #rospy.loginfo(str(rospy.get_rostime().nsecs) + " " + str(t_end_episode))
-            self.rqt_publishing(obs)
-            iteration=iteration+1
-            #V1 : instantaneous speed
-            #rospy.loginfo(str(obs[2]))
-            if abs(obs[2])<self.load_speed_criterion:
-                #If the speed is low, we check if it stays low for a while. 
-                is_stable=True
-                #rospy.loginfo("checking stability...")
-                check_rate = rospy.Rate(50)
-                for i in range (0,100):
-                    obs = self.take_observation()
-                    self.rqt_publishing(obs)
-                    if abs(obs[2]) > self.load_speed_criterion:
-                        is_stable=False
-                        break
-                    check_rate.sleep()
-                #If the speed has been bellow criterion for a while, we consider equilibrium.         
-                if is_stable:
-                    #rospy.loginfo(str("criterion met, speed = " + str(obs[2])))
-                    break
-
-                        
-        #rospy.loginfo("t= " + str(rospy.get_rostime().nsecs) + " exited while after " + str(iteration) + " iterations, theta_ld= " + str(obs[6]) + " final angle = " + str(obs[2]) + " action = " + str(action))
-
-          
-        #While with 2 conditions: not moving or took too long. 
-        #While temps< CRITERE TEMPS
-            #X éléments (10) [] remplie de vitesses instantannées
-            #Moyenne
-            #
-            #If moyenne<Critère de vitesse 
-                #
-        
-            #V2 
-            #X éléments remplie de positions 
-            #Diff entre plus grand et petis<critère
-            #   On est bon return  
-
-
-        # Take an observation
-        """
         done = self._is_done(obs,score)
         reward = self._compute_reward(obs, done)
         info = {}
@@ -257,7 +207,7 @@ class SnakeJoint(gym.Env):
         self.rate.sleep()
         
         if done:
-            rospy.loginfo(str("episode done, score = " + str(score)))
+            rospy.loginfo(str("episode done, score = " + str(score))+ " action = "+ str(action)+ " objective = " +str(obs[0])+ " epsilon p = "  + str(obs[7]))
 
         return obs, reward, done, info
 
@@ -273,24 +223,68 @@ class SnakeJoint(gym.Env):
         """
         self.iterator = 0
 
+        #shoud reset the joint to original position
+        rospy.wait_for_service('/gazebo/reset_world')
+
+        try:
+            rospy.loginfo("world reset called")
+            self.reset_world()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("reset_world failed!")
+
+
+        rospy.wait_for_service('/gazebo/set_model_configuration')
+
+        try:
+            #in the <robot>(xacro) named snake_joint of the param <robot_description>(launch)
+            #give joints named fixated_to_pivot and pivot_to_moving_link(xacro) the values 0.0 and 0.0
+            self.reset_joints("snake_joint", "robot_description", ["fixated_to_pivot", "pivot_to_moving_link"], [0.0, 0.0])
+
+
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("/gazebo/reset_joints service call failed")
+    
+
         rospy.wait_for_service('/gazebo/pause_physics')
+
         try:
             self.pause()
         except (rospy.ServiceException) as e:
             rospy.loginfo("rospause failed!")
 
+
         self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
-        self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        #self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        #added for test
+        self.current_torque = 0
         self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
         self.previous_epsilon = None
         self.steps_beyond_done = None
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
-        self.torque_pub.publish(joint_value) 
-        self.ros_clock = rospy.get_rostime().nsecs
-        obs = self.take_observation()
 
+        rospy.wait_for_service('/gazebo/unpause_physics')
+        try:
+            self.unpause()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("rosunpause failed!")
+
+        self.torque_pub.publish(joint_value) 
+
+        #Torque publish rate = 5hz, joint states publish rate = 160-200hz
+        #Theory: joint states is updated more than twice before torque is recieved and applied, meaning epsilon-previous_epsilon=0: the joint does not move yet. 
+        #This is an attempt at synchronization
+        #Failed, problem solved another way
+        """
+        try:
+            synchro=rospy.wait_for_message('/single_joint/link_motor_effort/command', Float64, timeout=5)
+        except rospy.ROSInterruptException:
+            rospy.loginfo("no torque detected or timeout")
+        """
         
+        self.ros_clock = rospy.get_rostime().nsecs
+
+        obs = self.take_observation()
 
         return obs
 
