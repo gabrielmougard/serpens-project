@@ -10,6 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.nn.utils import clip_grad_norm_
+import rospy
 
 from rainbowv2.network import Network
 #from rainbow.tensorboard import RainbowTensorBoard
@@ -108,6 +109,7 @@ class RainbowAgent:
         #Will write scalars that can be visualized using tensorboard in the directory "runLogs/timestamp"
         self.writer = SummaryWriter("runLogs/" + run_timestamp)
 
+
         # device: cpu / gpu
         self.device = torch.device(
             "cuda" if torch.cuda.is_available() else "cpu"
@@ -170,7 +172,7 @@ class RainbowAgent:
         self.dqn_target.eval()
         
         # optimizer
-        self.optimizer = optim.Adam(self.dqn.parameters())
+        self.optimizer = optim.Adam(self.dqn.parameters(),0.0001)
 
         # transition to store in memory
         self.transition = list()
@@ -240,14 +242,23 @@ class RainbowAgent:
         return next_state, reward, done
 
 
-    def update_model(self) -> torch.Tensor:
-        """Update the model by gradient descent."""
+    def update_model(self,frame_idx:int) -> torch.Tensor:
+        """Update the model by gradient descent.
+        shape of elementwise_loss = [128,51]
+        shape of loss = ([])
+        shape of weights ([128,1)]
+        """
         # PER needs beta to calculate weights
         samples = self.memory.sample(self.batch_size, beta=self.beta)
         weights = torch.FloatTensor(
             samples["weights"].reshape(-1, 1)
         ).to(self.device)
         indices = samples["indexes"]
+        #rospy.loginfo(samples.keys())
+        #rospy.loginfo(weights.shape)
+        #rospy.loginfo(indices.shape())
+
+        #torch.save(self.dqn.state_dict(),str("checkpoint_"+str(time.time())))
         
         # 1-step Learning loss
         elementwise_loss = self._compute_dqn_loss(samples, self.gamma)
@@ -255,7 +266,7 @@ class RainbowAgent:
         # PER: importance sampling before average
         loss = torch.mean(elementwise_loss * weights)
         
-        #TODO
+        self.writer.add_scalar('update_model/Lossv0', loss.detach().item(),frame_idx )
         
         # N-step Learning loss
         # we are gonna combine 1-step loss and n-step loss so as to
@@ -266,12 +277,20 @@ class RainbowAgent:
             elementwise_loss_n_loss = self._compute_dqn_loss(samples, gamma)
             elementwise_loss += elementwise_loss_n_loss
             
+            #rospy.loginfo(elementwise_loss_n_loss.shape)
+            #rospy.loginfo(elementwise_loss.shape)
+
             # PER: importance sampling before average
             loss = torch.mean(elementwise_loss * weights)
-            #TODO
+
 
         self.optimizer.zero_grad()
+        self.writer.add_scalar('update_model/Lossv1', loss.detach().item(),frame_idx )
+        #From pytorch doc: backward() Computes the gradient of current tensor w.r.t. graph leaves.
+        #self.writer.add_image("loss gradient before", loss, frame_idx)
         loss.backward()
+        #self.writer.add_image("loss gradient after", loss, frame_idx)
+        self.writer.add_scalar('update_model/Lossv2', loss.detach().item(),frame_idx )
         clip_grad_norm_(self.dqn.parameters(), 10.0)
         self.optimizer.step()
         
@@ -283,7 +302,13 @@ class RainbowAgent:
         # NoisyNet: reset noise
         self.dqn.reset_noise()
         self.dqn_target.reset_noise()
+        
+        #rospy.loginfo("second")
+        #rospy.loginfo(loss.shape)
 
+        #rospy.loginfo("loss dimension = " + loss.ndim()  )   
+        #rospy.loginfo("loss = " + str(loss.detach().item()) + "type = " + str(type(loss.detach().item())  )   )   
+        self.writer.add_scalar('update_model/Loss', loss.detach().item(),frame_idx )
         return loss.detach().item()
 
 
@@ -313,21 +338,26 @@ class RainbowAgent:
 
             # if episode ends
             if done:
+                #rospy.loginfo("logging for done")
+                self.writer.add_scalar('train/score', score, frame_idx)
+                self.writer.add_scalar('train/final_epsilon', state[6], frame_idx)
+                self.writer.add_scalar('train/epsilon_p', state[7], frame_idx)
                 state = self.env.reset()
                 scores.append(score)
                 score = 0
 
             # if training is ready
             if self.memory.get_stored_size() >= self.batch_size:
-                loss = self.update_model()
-                #TODO
+                #frame_id given as argument for logging by self.writer. 
+                #rospy.loginfo("frame_idx= " + str(frame_idx) + "type = " + str(type(frame_idx)))
+                loss = self.update_model(frame_idx)
 
                 losses.append(loss)
                 update_cnt += 1
                 
                 # if hard update is needed
                 if update_cnt % self.target_update == 0:
-                    self._target_hard_update()
+                    self._target_hard_update(loss)
 
         self.env.close()
 
@@ -404,8 +434,14 @@ class RainbowAgent:
         return elementwise_loss
 
 
-    def _target_hard_update(self):
+    def _target_hard_update(self,loss):
         """Hard update: target <- local."""
         self.dqn_target.load_state_dict(self.dqn.state_dict())
-        torch.save(self.dqn.state_dict(),str("checkpoint_"+str(time.time())))
+        #torch.save(self.dqn.state_dict(),str("checkpoint_"+str(time.time())))
+
+        torch.save({
+            'model_state_dict': self.dqn.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': loss,
+            }, str("checkpoints/checkpoint_"+str(time.time())))
 
