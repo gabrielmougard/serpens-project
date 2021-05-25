@@ -283,7 +283,10 @@ class RainbowAgent:
             # PER: importance sampling before average
             loss = torch.mean(elementwise_loss * weights)
 
-
+        
+        rospy.loginfo(
+            f"{elementwise_loss}"
+            )
         self.optimizer.zero_grad()
         self.writer.add_scalar('update_model/Lossv1', loss.detach().item(),frame_idx )
         #From pytorch doc: backward() Computes the gradient of current tensor w.r.t. graph leaves.
