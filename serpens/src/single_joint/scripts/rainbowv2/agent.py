@@ -425,11 +425,12 @@ class RainbowAgent:
             proj_dist.view(-1).index_add_(
                 0, (u + offset).view(-1), (next_dist * (b - l.float())).view(-1)
             )
+            print(f"Next Action : {next_action}\n Next Dist : {next_dist}\n")
 
         dist = self.dqn.dist(state)
         log_p = torch.log(dist[range(self.batch_size), action])
         elementwise_loss = -(proj_dist * log_p).sum(1)
-        print(elementwise_loss)
+        print(f"Proj Dist : {proj_dist}\n Dist : {dist}\n Log_p : {log_p}\n")
         if torch.isnan(elementwise_loss[0][0]):
             exit()
 
