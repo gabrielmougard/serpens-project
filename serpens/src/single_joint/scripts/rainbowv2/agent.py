@@ -429,7 +429,9 @@ class RainbowAgent:
         dist = self.dqn.dist(state)
         log_p = torch.log(dist[range(self.batch_size), action])
         elementwise_loss = -(proj_dist * log_p).sum(1)
-
+        print(elementwise_loss)
+        if torch.isnan(elementwise_loss[0][0]):
+            exit()
 
         return elementwise_loss
 
