@@ -71,7 +71,7 @@ class SnakeJoint(gym.Env):
             dtype=np.float32
         )
 
-        #self.seed()
+        self.seed()
         # start the environment server at a refreshing rate of 10Hz
         self.rate = rospy.Rate(10)
 
@@ -267,12 +267,12 @@ class SnakeJoint(gym.Env):
             rospy.loginfo("rospause failed!")
 
 
-        self.episode_external_torque = np.random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #added for test
         self.current_torque = 0
         self.eps_buffer = deque(maxlen=15)
-        self.episode_theta_ld = np.random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
         self.previous_epsilon = None
         self.steps_beyond_done = None
         joint_value = Float64()
