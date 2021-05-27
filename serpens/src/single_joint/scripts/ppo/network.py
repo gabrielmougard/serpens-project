@@ -7,10 +7,10 @@ class MlpPolicy(nn.Module):
         super(MlpPolicy, self).__init__()
         self.action_size = action_size
         self.input_size = input_size
-        self.fc1 = nn.Linear(self.input_size, 128)
-        self.fc2 = nn.Linear(128, 128)
-        self.fc3_pi = nn.Linear(128, self.action_size)
-        self.fc3_v = nn.Linear(128, 1)
+        self.fc1 = nn.Linear(self.input_size, 24)
+        self.fc2 = nn.Linear(24, 24)
+        self.fc3_pi = nn.Linear(24, self.action_size)
+        self.fc3_v = nn.Linear(24, 1)
         self.tanh = nn.Tanh()
         self.relu = nn.ReLU()
         self.softmax = nn.Softmax(dim=-1)
