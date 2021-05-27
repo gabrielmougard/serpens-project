@@ -1,3 +1,6 @@
+import math
+from collections import deque
+
 import sys
 from sys import getsizeof
 import gym
@@ -32,6 +35,7 @@ class SnakeJoint(gym.Env):
         self.max_allowed_epsilon =  rospy.get_param('/rainbow/max_allowed_epsilon')
         self.max_ep_length =  rospy.get_param('/rainbow/max_ep_length')
         self.min_allowed_epsilon_p =  rospy.get_param('/rainbow/min_allowed_epsilon_p')
+        self.eps_buffer = deque(maxlen=15)
 
         # publishers and subscribers
         self.torque_pub = rospy.Publisher('/single_joint/link_motor_effort/command', Float64, queue_size=10)
@@ -67,7 +71,7 @@ class SnakeJoint(gym.Env):
             dtype=np.float32
         )
 
-        #self.seed()
+        self.seed()
         # start the environment server at a refreshing rate of 10Hz
         self.rate = rospy.Rate(10)
 
@@ -126,10 +130,18 @@ class SnakeJoint(gym.Env):
 
 
     def _is_done(self, observation):
+        eps_buffer_diverged = False
+        large_eps_count = 0
+        for eps in self.eps_buffer:
+            if abs(eps) > self.max_allowed_epsilon:
+                large_eps_count += 1
+        if large_eps_count / len(self.eps_buffer) > 0.5: # If more than 50% of the entry in the buffer are greater than the max epsilon threshold 
+            eps_buffer_diverged = True
+
         done = bool(
             (
-                abs(observation[6]) > self.max_allowed_epsilon and
-                abs(observation[7]) < self.min_allowed_epsilon_p
+                eps_buffer_diverged and
+                abs(observation[7]) < self.min_allowed_epsilon_p # If the system is not moving anymore
             ) or
             abs(observation[1]) >= self.theta_l_max
         )
@@ -143,7 +155,7 @@ class SnakeJoint(gym.Env):
         :return:reward
         """
         if not done: 
-            reward = 1 
+            reward = 1/math.exp(obs[6]) 
         elif self.steps_beyond_done is None:
             # Joint just diverged
             self.steps_beyond_done = 0
@@ -202,6 +214,7 @@ class SnakeJoint(gym.Env):
         self.ros_clock = rospy.get_rostime().nsecs
 
         obs = self.take_observation()
+        self.eps_buffer.append(obs[6])
         done = self._is_done(obs)
         reward = self._compute_reward(obs, done)
         info = {}
@@ -254,11 +267,12 @@ class SnakeJoint(gym.Env):
             rospy.loginfo("rospause failed!")
 
 
-        self.episode_external_torque = np.random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #added for test
         self.current_torque = 0
-        self.episode_theta_ld = np.random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        self.eps_buffer = deque(maxlen=15)
+        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
         self.previous_epsilon = None
         self.steps_beyond_done = None
         joint_value = Float64()
