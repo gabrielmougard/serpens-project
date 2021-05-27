@@ -43,6 +43,8 @@
         <physics type="ode">
             <real_time_update_rate>6000.0</real_time_update_rate>
             <real_time_factor> 10 </real_time_factor>
+            <!--Deactivate gravity along each axix-->
+            <gravity>0 0 0</gravity>
             <ode>
             </ode>
         </physics>
