@@ -108,7 +108,7 @@ class PPOAgent:
                     current_state = new_state
                     total_episode_reward += reward
 
-                    if terminal or total_episode_reward > 200:
+                    if terminal or total_episode_reward > 100:
                         episode_length = step - start_step
                         reward_history.append(total_episode_reward)
                         avg_reward.append(sum(reward_history[-10:])/10.0)
@@ -116,7 +116,7 @@ class PPOAgent:
                         self.finish_path(episode_length)
                         if len(reward_history) > 100:
                             self.writer.add_scalar('global_avg_score', sum(reward_history[-100:-1]) / 100, episode)
-                        if len(reward_history) > 100 and sum(reward_history[-100:-1]) / 100 >= 195:
+                        if len(reward_history) > 100 and sum(reward_history[-100:-1]) / 100 >= 95:
                             solved = True
 
                         rospy.loginfo('episode: %.2f, total step: %.2f, last_episode length: %.2f, last_episode_reward: %.2f, '
@@ -125,7 +125,7 @@ class PPOAgent:
                         time.sleep(2)
                         self.env.reset()
 
-                        if step > 15000:
+                        if step > 50000:
                             solved = True
 
                         break
@@ -225,5 +225,5 @@ class PPOAgent:
 
         # plt.savefig('score.png')
         self.writer.add_scalar('loss', self.loss.detach().cpu().item(), episode)
-        self.writer.add_scalar('score', sum(avg_reward)/len(avg_reward), episode)
+
         
