@@ -140,10 +140,10 @@ class SnakeJoint(gym.Env):
 
         done = bool(
             (
-                eps_buffer_diverged and
-                abs(observation[7]) < self.min_allowed_epsilon_p # If the system is not moving anymore
-            ) or
-            abs(observation[1]) >= self.theta_l_max
+                eps_buffer_diverged
+                and abs(observation[7]) < self.min_allowed_epsilon_p # If the system is not moving anymore
+            ) 
+            or abs(observation[1]) >= self.theta_l_max
         )
         return done
 
