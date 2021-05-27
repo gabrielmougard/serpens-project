@@ -11,7 +11,6 @@ import time
 from std_srvs.srv import Empty
 from gazebo_msgs.srv import SetModelConfiguration
 
-
 class SnakeJoint(gym.Env):
     def __init__(self):
         self._observation_msg = None
@@ -68,7 +67,7 @@ class SnakeJoint(gym.Env):
             dtype=np.float32
         )
 
-        self.seed()
+        #self.seed()
         # start the environment server at a refreshing rate of 10Hz
         self.rate = rospy.Rate(10)
 
@@ -126,9 +125,14 @@ class SnakeJoint(gym.Env):
         return np.array(obs)
 
 
-    def _is_done(self, observation,score):
-
-        done = bool(abs(observation[7]) < self.min_allowed_epsilon_p) or bool(score > 200)
+    def _is_done(self, observation):
+        done = bool(
+            (
+                abs(observation[6]) > self.max_allowed_epsilon and
+                abs(observation[7]) < self.min_allowed_epsilon_p
+            ) or
+            abs(observation[1]) >= self.theta_l_max
+        )
         return done
 
 
@@ -138,8 +142,8 @@ class SnakeJoint(gym.Env):
         having different data than other previous functions
         :return:reward
         """
-        if not done:
-            reward = 1.0
+        if not done: 
+            reward = 1 
         elif self.steps_beyond_done is None:
             # Joint just diverged
             self.steps_beyond_done = 0
@@ -150,7 +154,7 @@ class SnakeJoint(gym.Env):
         return reward
 
 
-    def step(self, action,score):
+    def step(self, action):
         """
         Function executed each time step.
         Here we get the action execute it in a time step and retrieve the
@@ -198,7 +202,7 @@ class SnakeJoint(gym.Env):
         self.ros_clock = rospy.get_rostime().nsecs
 
         obs = self.take_observation()
-        done = self._is_done(obs,score)
+        done = self._is_done(obs)
         reward = self._compute_reward(obs, done)
         info = {}
 
@@ -206,9 +210,6 @@ class SnakeJoint(gym.Env):
         
         self.rate.sleep()
         
-        if done:
-            rospy.loginfo(str("episode done, score = " + str(score))+ " action = "+ str(action)+ " objective = " +str(obs[0])+ " epsilon p = "  + str(obs[7]))
-
         return obs, reward, done, info
 
 
@@ -253,11 +254,11 @@ class SnakeJoint(gym.Env):
             rospy.loginfo("rospause failed!")
 
 
-        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_external_torque = np.random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #added for test
         self.current_torque = 0
-        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        self.episode_theta_ld = np.random.uniform(-self.theta_ld_max, self.theta_ld_max)
         self.previous_epsilon = None
         self.steps_beyond_done = None
         joint_value = Float64()
@@ -285,7 +286,6 @@ class SnakeJoint(gym.Env):
         self.ros_clock = rospy.get_rostime().nsecs
 
         obs = self.take_observation()
-
         return obs
 
     def rqt_publishing(self,obs):
