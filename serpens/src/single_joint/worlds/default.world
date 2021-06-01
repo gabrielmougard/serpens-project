@@ -38,7 +38,7 @@
               </script>
             </material>
           </visual>
-            </link>
+          </link>
           </model>
         <physics type="ode">
             <real_time_update_rate>6000.0</real_time_update_rate>

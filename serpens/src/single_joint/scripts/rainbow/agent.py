@@ -191,6 +191,7 @@ class RainbowAgent:
         self.convergence_avg_epsilon = convergence_avg_epsilon
         self.convergence_avg_epsilon_p = convergence_avg_epsilon_p
 
+        #TODO 
         # model checkpoint object
         self.checkpoint = tf.train.Checkpoint(optimizer=self.optimizer, model=self.dqn_target)
         self.checkpoint_manager = tf.train.CheckpointManager(
@@ -218,7 +219,7 @@ class RainbowAgent:
         """
         Take an action and return the response of the env.
         """
-        next_state, reward, done, _ = self.env.step(action)
+        next_state, reward, done, _ = self.env.step(action,score)
 
         if not self.is_test:
             self.transition += [reward, next_state, done]

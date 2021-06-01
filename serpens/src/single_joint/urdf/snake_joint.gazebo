@@ -16,4 +16,21 @@
         <springStiffness>14</springStiffness>
     </gazebo>
 
+    <gazebo reference="fixated_to_pivot_phantom">
+        <selfCollide>false</selfCollide>
+    </gazebo>
+
+    <gazebo reference="pivot_to_moving_link_phantom">
+        <selfCollide>false</selfCollide>
+        <springStiffness>14</springStiffness>
+    </gazebo>
+
+    <gazebo reference="moving_link_phantom">
+        <material>Gazebo/Green</material>
+    </gazebo>
+
+
+
+    <!--phantom twin of the joint to display the wanted behavior in the gui-->
+
 </robot>

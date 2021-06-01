@@ -266,8 +266,8 @@ class SnakeJoint(gym.Env):
         except (rospy.ServiceException) as e:
             rospy.loginfo("rospause failed!")
 
-
-        self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
+        self.episode_external_torque=0
+        #self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #self.current_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
         #added for test
         self.current_torque = 0
@@ -277,6 +277,18 @@ class SnakeJoint(gym.Env):
         self.steps_beyond_done = None
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
+
+        #setting the phantom joint to the target position
+        rospy.wait_for_service('/gazebo/set_model_configuration')
+
+        try:
+            #in the <robot>(xacro) named snake_joint of the param <robot_description>(launch)
+            #give joints named fixated_to_pivot and pivot_to_moving_link(xacro) the values 0.0 and 0.0
+            self.reset_joints("snake_joint", "robot_description", ["pivot_to_moving_link_phantom","spring_phantom"], [self.episode_theta_ld, 0.0])
+
+
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("/gazebo/reset_joints service call failed")
 
         rospy.wait_for_service('/gazebo/unpause_physics')
         try:
