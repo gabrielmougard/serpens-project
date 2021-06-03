@@ -30,6 +30,6 @@ rainbow:
   tau_ext_max: 2.0 # N.m
   torque_step: 0.01 # N.m
   max_allowed_epsilon: 0.08726 # 5 deg
-  min_allowed_epsilon_p: 0.0001 # 1e-4
+  min_allowed_epsilon_p: 0.00000001 # 1e-8
   max_ep_length: 200
 

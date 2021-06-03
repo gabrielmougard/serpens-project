@@ -137,7 +137,16 @@ class SnakeJoint(gym.Env):
                 large_eps_count += 1
         if large_eps_count / len(self.eps_buffer) > 0.5: # If more than 50% of the entry in the buffer are greater than the max epsilon threshold 
             eps_buffer_diverged = True
-
+        """
+        if eps_buffer_diverged :
+            rospy.loginfo("buffer diverged")
+        
+        if abs(observation[7]) < self.min_allowed_epsilon_p:
+            rospy.loginfo("stability")
+            
+        if abs(observation[1]) >= self.theta_l_max:
+            rospy.loginfo("angle too great")
+        """
         done = bool(
             (
                 eps_buffer_diverged
@@ -145,6 +154,9 @@ class SnakeJoint(gym.Env):
             ) 
             or abs(observation[1]) >= self.theta_l_max
         )
+        #V2 similar to mountaincar
+
+        
         return done
 
 
@@ -153,6 +165,7 @@ class SnakeJoint(gym.Env):
         Gives more points for staying upright, gets data from given observations to avoid
         having different data than other previous functions
         :return:reward
+        """
         """
         if not done: 
             reward = 1/math.exp(obs[6]) 
@@ -163,6 +176,21 @@ class SnakeJoint(gym.Env):
         else:
             self.steps_beyond_done += 1
             reward = 0.0
+        return reward
+        """
+        #V2 similar to mountaincar
+        reward=0.0
+        if not done: 
+            reward = reward-math.exp(obs[6])
+            if obs[6]<self.min_allowed_epsilon_p:
+                reward=reward+0.5 
+        elif self.steps_beyond_done is None:
+            # Joint just diverged
+            self.steps_beyond_done = 0
+            reward = reward+1.0
+        else:
+            self.steps_beyond_done += 1
+        
         return reward
 
 

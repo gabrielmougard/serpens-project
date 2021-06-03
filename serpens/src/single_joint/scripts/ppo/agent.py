@@ -107,8 +107,11 @@ class PPOAgent:
 
                     current_state = new_state
                     total_episode_reward += reward
-
+                    """
                     if terminal or total_episode_reward > 100:
+                    """
+                    #V2 similar to mountaincar
+                    if terminal or episode_length > 200:
                         episode_length = step - start_step
                         reward_history.append(total_episode_reward)
                         avg_reward.append(sum(reward_history[-10:])/10.0)
