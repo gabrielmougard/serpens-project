@@ -65,7 +65,7 @@ class PPOAgent:
     def new_random_game(self):
         self.env.reset()
         action = self.env.action_space.sample()
-        screen, reward, terminal, info = self.env.step(action)
+        screen, reward, terminal, info, stability_iterator = self.env.step(action)
         return screen, reward, action, terminal
 
 
@@ -83,6 +83,7 @@ class PPOAgent:
                 episode += 1
                 episode_length = 0
 
+
                 # Get initial state
                 state, reward, action, terminal = self.new_random_game()
                 current_state = state
@@ -92,6 +93,7 @@ class PPOAgent:
                 while not solved:
                     step += 1
                     episode_length += 1
+                    stability_iterator=0
 
                     # Choose action
                     prob_a = self.policy_network.pi(torch.FloatTensor(current_state).to(self.device))
@@ -99,7 +101,7 @@ class PPOAgent:
                     action = torch.distributions.Categorical(prob_a).sample().item()
 
                     # Act
-                    state, reward, terminal, _ = self.env.step(action)
+                    state, reward, terminal, _, stability_iterator = self.env.step(action)
                     new_state = state
                     reward = -1 if terminal else reward
                     self.writer.add_scalar('epsilon', state[6], step)
@@ -111,7 +113,12 @@ class PPOAgent:
                     if terminal or total_episode_reward > 100:
                     """
                     #V2 similar to mountaincar
-                    if terminal or episode_length > 200:
+                    #If 
+                    #A: The joint diverged (remained immobile far from the target for too long)
+                    #B: Took too long 
+                    #C: Remained close enough to the target for an extended period of time 
+                    #Then the episode is over. 
+                    if terminal or total_episode_reward < -200.0 or stability_iterator>=50:
                         episode_length = step - start_step
                         reward_history.append(total_episode_reward)
                         avg_reward.append(sum(reward_history[-10:])/10.0)
@@ -123,8 +130,9 @@ class PPOAgent:
                             solved = True
 
                         rospy.loginfo('episode: %.2f, total step: %.2f, last_episode length: %.2f, last_episode_reward: %.2f, '
-                            'loss: %.4f, lr: %.4f' % (episode, step, episode_length, total_episode_reward, self.loss,
-                                                        self.scheduler.get_lr()[0]))
+                            'loss: %.4f, lr: %.4f, stability: %.4f' % (episode, step, episode_length, total_episode_reward, self.loss,
+                                                        self.scheduler.get_lr()[0],stability_iterator))
+                        rospy.loginfo(terminal)
                         time.sleep(2)
                         self.env.reset()
 

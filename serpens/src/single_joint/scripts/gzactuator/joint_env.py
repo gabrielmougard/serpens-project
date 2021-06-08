@@ -13,6 +13,7 @@ import numpy as np
 import time
 from std_srvs.srv import Empty
 from gazebo_msgs.srv import SetModelConfiguration
+import time
 
 class SnakeJoint(gym.Env):
     def __init__(self):
@@ -52,6 +53,8 @@ class SnakeJoint(gym.Env):
         rospy.Subscriber('/single_joint/joint_states', JointState, self.observation_callback)
 
         self.action_space = spaces.Discrete(self.n_actions)
+        #is incremented as long as the joint remains close to the target. 
+        #We consider the end of an episode if the joint remains in the target range for more than 50 steps
         self.stability_iterator=0
 
         boundaries = np.array([
@@ -106,13 +109,13 @@ class SnakeJoint(gym.Env):
                     sys.exit(1)
 
 
-        epsilon = abs(self.episode_theta_ld - obs_message.position[1])
+        epsilon = abs(self.episode_theta_ld - obs_message.position[2])
         #rospy.loginfo("epsilon= "+ str(epsilon) + " previous_epsilon = "+ (str(self.previous_epsilon) if self.previous_epsilon else "not yet") )
         
         obs = [
             self.episode_theta_ld,
-            obs_message.position[1], # theta_l
-            obs_message.velocity[1], # theta_l_p
+            obs_message.position[2], # theta_l
+            obs_message.velocity[2], # theta_l_p
             obs_message.position[0], # theta_m
             obs_message.velocity[0], # theta_m_p
             self.episode_external_torque,
@@ -137,6 +140,7 @@ class SnakeJoint(gym.Env):
                 large_eps_count += 1
         if large_eps_count / len(self.eps_buffer) > 0.5: # If more than 50% of the entry in the buffer are greater than the max epsilon threshold 
             eps_buffer_diverged = True
+        
         """
         if eps_buffer_diverged :
             rospy.loginfo("buffer diverged")
@@ -182,8 +186,11 @@ class SnakeJoint(gym.Env):
         reward=0.0
         if not done: 
             reward = reward-math.exp(obs[6])
-            if obs[6]<self.min_allowed_epsilon_p:
-                reward=reward+0.5 
+            if obs[6]<self.max_allowed_epsilon:
+                reward=reward+0.5
+                self.stability_iterator=self.stability_iterator+1
+            else:
+                self.stability_iterator=0 
         elif self.steps_beyond_done is None:
             # Joint just diverged
             self.steps_beyond_done = 0
@@ -207,7 +214,7 @@ class SnakeJoint(gym.Env):
         Here we should convert the action num to movement action, execute the action in the
         simulation and get the observations result of performing that action.
         """
-
+        
         rospy.wait_for_service('/gazebo/unpause_physics')
         try:
             self.unpause()
@@ -251,7 +258,7 @@ class SnakeJoint(gym.Env):
         
         self.rate.sleep()
         
-        return obs, reward, done, info
+        return obs, reward, done, info, self.stability_iterator
 
 
 
@@ -265,7 +272,7 @@ class SnakeJoint(gym.Env):
         """
         self.iterator = 0
 
-        #shoud reset the joint to original position
+        #To imitate carpole_gazebo ppo implementation, seems iconsequential
         rospy.wait_for_service('/gazebo/reset_world')
 
         try:
@@ -275,24 +282,16 @@ class SnakeJoint(gym.Env):
             rospy.loginfo("reset_world failed!")
 
 
+        #reset the joint to neutral position
         rospy.wait_for_service('/gazebo/set_model_configuration')
-
         try:
             #in the <robot>(xacro) named snake_joint of the param <robot_description>(launch)
             #give joints named fixated_to_pivot and pivot_to_moving_link(xacro) the values 0.0 and 0.0
+            rospy.loginfo("joint reset called")
             self.reset_joints("snake_joint", "robot_description", ["fixated_to_pivot", "pivot_to_moving_link"], [0.0, 0.0])
-
-
         except (rospy.ServiceException) as e:
             rospy.loginfo("/gazebo/reset_joints service call failed")
-    
 
-        rospy.wait_for_service('/gazebo/pause_physics')
-
-        try:
-            self.pause()
-        except (rospy.ServiceException) as e:
-            rospy.loginfo("rospause failed!")
 
         self.episode_external_torque=0
         #self.episode_external_torque = self.np_random.uniform(-self.tau_ext_max, self.tau_ext_max)
@@ -300,23 +299,28 @@ class SnakeJoint(gym.Env):
         #added for test
         self.current_torque = 0
         self.eps_buffer = deque(maxlen=15)
-        self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        #self.episode_theta_ld = self.np_random.uniform(-self.theta_ld_max, self.theta_ld_max)
+        #Testing with static target
+        self.episode_theta_ld = 1.0 #about 57°
         self.previous_epsilon = None
         self.steps_beyond_done = None
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
+        self.stability_iterator=0
 
-        #setting the phantom joint to the target position
+        #set the phantom link (the green one) to the target position
         rospy.wait_for_service('/gazebo/set_model_configuration')
-
         try:
-            #in the <robot>(xacro) named snake_joint of the param <robot_description>(launch)
-            #give joints named fixated_to_pivot and pivot_to_moving_link(xacro) the values 0.0 and 0.0
-            self.reset_joints("snake_joint", "robot_description", ["pivot_to_moving_link_phantom","spring_phantom"], [self.episode_theta_ld, 0.0])
-
-
+            self.reset_joints("snake_joint", "robot_description", ["fixated_to_pivot_phantom","pivot_to_moving_link_phantom"], [self.episode_theta_ld, 0.0])
         except (rospy.ServiceException) as e:
             rospy.loginfo("/gazebo/reset_joints service call failed")
+
+        
+        rospy.wait_for_service('/gazebo/pause_physics')
+        try:
+            self.pause()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("rospause failed!")
 
         rospy.wait_for_service('/gazebo/unpause_physics')
         try:
@@ -325,17 +329,6 @@ class SnakeJoint(gym.Env):
             rospy.loginfo("rosunpause failed!")
 
         self.torque_pub.publish(joint_value) 
-
-        #Torque publish rate = 5hz, joint states publish rate = 160-200hz
-        #Theory: joint states is updated more than twice before torque is recieved and applied, meaning epsilon-previous_epsilon=0: the joint does not move yet. 
-        #This is an attempt at synchronization
-        #Failed, problem solved another way
-        """
-        try:
-            synchro=rospy.wait_for_message('/single_joint/link_motor_effort/command', Float64, timeout=5)
-        except rospy.ROSInterruptException:
-            rospy.loginfo("no torque detected or timeout")
-        """
         
         self.ros_clock = rospy.get_rostime().nsecs
 
