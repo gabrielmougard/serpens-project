@@ -3,8 +3,10 @@
 """
 The main function for the Reinforcement training node.
 """
+import time
 
 import rospy
+import torch
 
 from ppo.agent import PPOAgent
 from gzactuator.joint_env import SnakeJoint 
@@ -59,4 +61,18 @@ if __name__ == "__main__":
         entropy_coef
     )
 
-    agent.train()
+    train = True
+
+    # Train loop
+    if train:
+        agent.train()
+    else:
+        # Inference
+        model_path = "saved_models/<MODEL_NAME>"
+        model = torch.load(model_path)
+        model.eval()
+
+        while True:
+            sine_order = math.sin(time.time()) 
+            agent.predict(model, sine_order)
+

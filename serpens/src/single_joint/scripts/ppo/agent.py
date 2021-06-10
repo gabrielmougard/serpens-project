@@ -145,6 +145,22 @@ class PPOAgent:
         self.env.close()
 
 
+    def predict(self, model, order, state=None):
+        if not state:
+            # Get initial state
+            state, reward, action, terminal = self.new_random_game()
+        # Choose action
+        prob_a = model.pi(torch.FloatTensor(state).to(self.device))
+        # print(prob_a)
+        action = torch.distributions.Categorical(prob_a).sample().item()
+        new_state, new_reward, new_action, _ = self.env.step(action)
+
+        # plotting data
+        
+
+        return new_state, new_reward, new_action
+
+
     def update_network(self):
         # get ratio
         pi = self.policy_network.pi(torch.FloatTensor(self.memory['state']).to(self.device))
