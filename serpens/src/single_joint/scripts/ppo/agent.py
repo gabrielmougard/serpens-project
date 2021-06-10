@@ -25,7 +25,8 @@ class PPOAgent:
         lmbda: float,
         eps_clip: float,
         v_coef: int,
-        entropy_coef: float
+        entropy_coef: float,
+        checkpoint_interval: int
     ):
         self.env = env
         self.k_epoch = k_epoch
@@ -37,12 +38,14 @@ class PPOAgent:
         self.update_freq = update_freq
         self.gamma = gamma
         self.memory_size = memory_size
+        self.checkpoint_interval = checkpoint_interval
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.action_size = self.env.action_space.n
         self.policy_network = MlpPolicy(action_size=self.action_size).to(self.device)
         self.optimizer = optim.Adam(self.policy_network.parameters(), lr=learning_rate)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=self.k_epoch, gamma=0.999)
         self.loss = 0
+        self.previous_checkpointed_loss = self.loss
         self.criterion = nn.MSELoss()
         self.memory = {
             'state': [], 'action': [], 'reward': [], 'next_state': [], 'action_prob': [], 'terminal': [], 'count': 0,
@@ -60,6 +63,8 @@ class PPOAgent:
         )
         #Will write scalars that can be visualized using tensorboard in the directory "runLogs/timestamp"
         self.writer = SummaryWriter("runLogs/" + run_timestamp)
+        self.inference_writer = SummaryWriter("inferenceLogs/" + run_timestamp)
+        self.CHECKPOINT_PATH = "saved_models/"
 
 
     def new_random_game(self):
@@ -150,10 +155,16 @@ class PPOAgent:
                 if episode % self.plot_every == 0:
                     self.plot_graph(reward_history, avg_reward, episode)
 
+                if episode % self.checkpoint_interval == 0:
+                    # checkpoint state dict of model
+                    if self.previous_checkpointed_loss > self.loss:
+                        torch.save(self.policy_network.state_dict(), self.CHECKPOINT_PATH)
+                    self.previous_checkpointed_loss = self.loss
+
         self.env.close()
 
 
-    def predict(self, model, order, state=None):
+    def predict(self, model, order, step, state=None):
         if not state:
             # Get initial state
             state, reward, action, terminal = self.new_random_game()
@@ -164,9 +175,9 @@ class PPOAgent:
         new_state, new_reward, new_action, _ = self.env.step(action)
 
         # plotting data
-        
+        self.inference_writer.add_scalar('epsilon', new_state[6], step)
 
-        return new_state, new_reward, new_action
+        return new_state, new_reward, new_action, step+1
 
 
     def update_network(self):

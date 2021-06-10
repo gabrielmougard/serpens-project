@@ -7,8 +7,10 @@ import time
 
 import rospy
 import torch
+from gym.utils import seeding
 
 from ppo.agent import PPOAgent
+from ppo.network import MlpPolicy
 from gzactuator.joint_env import SnakeJoint 
 
 if __name__ == "__main__":
@@ -46,6 +48,7 @@ if __name__ == "__main__":
     v_coef = 1
     entropy_coef = 0.01
     memory_size = 400
+    checkpoint_interval = 50 # every 50 episodes
 
     agent = PPOAgent(
         joint_env,
@@ -58,7 +61,8 @@ if __name__ == "__main__":
         lmbda,
         eps_clip,
         v_coef,
-        entropy_coef
+        entropy_coef,
+        checkpoint_interval
     )
 
     train = True
@@ -68,11 +72,16 @@ if __name__ == "__main__":
         agent.train()
     else:
         # Inference
-        model_path = "saved_models/<MODEL_NAME>"
-        model = torch.load(model_path)
+        inference_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        model = MlpPolicy(action_size=joint_env.action_space.n).to(inference_device)
+        model.load_state_dict(torch.load("saved_models/"))
         model.eval()
-
+        np_random, _ = seeding.np_random(5048795115606990371)
+        # Decide of a random constant order to hold
+        theta_ld_max = rospy.get_param("/rainbow/theta_ld_max")
+        order = np_random.uniform(-theta_ld_max, theta_ld_max)
+        state = None
+        step = 0
         while True:
-            sine_order = math.sin(time.time()) 
-            agent.predict(model, sine_order)
-
+            state, _, _, step = agent.predict(model, order, step, state=state)
+            rospy.loginfo(f"[INFERENCE] epsilon: {state[6]}, step: {step}")
