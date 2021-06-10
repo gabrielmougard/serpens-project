@@ -65,7 +65,7 @@ if __name__ == "__main__":
         checkpoint_interval
     )
 
-    train = True
+    train = False
 
     # Train loop
     if train:
@@ -74,7 +74,7 @@ if __name__ == "__main__":
         # Inference
         inference_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = MlpPolicy(action_size=joint_env.action_space.n).to(inference_device)
-        model.load_state_dict(torch.load("saved_models/"))
+        model.load_state_dict(torch.load("saved_models"))
         model.eval()
         np_random, _ = seeding.np_random(5048795115606990371)
         # Decide of a random constant order to hold

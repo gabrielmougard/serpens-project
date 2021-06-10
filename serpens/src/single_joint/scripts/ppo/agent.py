@@ -45,7 +45,6 @@ class PPOAgent:
         self.optimizer = optim.Adam(self.policy_network.parameters(), lr=learning_rate)
         self.scheduler = optim.lr_scheduler.StepLR(self.optimizer, step_size=self.k_epoch, gamma=0.999)
         self.loss = 0
-        self.previous_checkpointed_loss = self.loss
         self.criterion = nn.MSELoss()
         self.memory = {
             'state': [], 'action': [], 'reward': [], 'next_state': [], 'action_prob': [], 'terminal': [], 'count': 0,
@@ -64,7 +63,7 @@ class PPOAgent:
         #Will write scalars that can be visualized using tensorboard in the directory "runLogs/timestamp"
         self.writer = SummaryWriter("runLogs/" + run_timestamp)
         self.inference_writer = SummaryWriter("inferenceLogs/" + run_timestamp)
-        self.CHECKPOINT_PATH = "saved_models/"
+        self.CHECKPOINT_PATH = "saved_models"
 
 
     def new_random_game(self):
@@ -157,27 +156,26 @@ class PPOAgent:
 
                 if episode % self.checkpoint_interval == 0:
                     # checkpoint state dict of model
-                    if self.previous_checkpointed_loss > self.loss:
-                        torch.save(self.policy_network.state_dict(), self.CHECKPOINT_PATH)
+                    torch.save(self.policy_network.state_dict(), self.CHECKPOINT_PATH)
                     self.previous_checkpointed_loss = self.loss
 
         self.env.close()
 
 
     def predict(self, model, order, step, state=None):
-        if not state:
+        if state is None:
             # Get initial state
             state, reward, action, terminal = self.new_random_game()
         # Choose action
         prob_a = model.pi(torch.FloatTensor(state).to(self.device))
         # print(prob_a)
         action = torch.distributions.Categorical(prob_a).sample().item()
-        new_state, new_reward, new_action, _ = self.env.step(action)
+        new_state, new_reward, new_action, _, _ = self.env.step(action)
 
         # plotting data
         self.inference_writer.add_scalar('epsilon', new_state[6], step)
 
-        return new_state, new_reward, new_action, step+1
+        return (new_state, new_reward, new_action, step+1)
 
 
     def update_network(self):
