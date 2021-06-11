@@ -122,7 +122,7 @@ class PPOAgent:
                     #B: Took too long 
                     #C: Remained close enough to the target for an extended period of time 
                     #Then the episode is over. 
-                    if terminal or total_episode_reward < -200.0 or stability_iterator>=50:
+                    if terminal or episode_length > 1000:#or stability_iterator>=50:
                         episode_length = step - start_step
                         reward_history.append(total_episode_reward)
                         avg_reward.append(sum(reward_history[-10:])/10.0)
@@ -130,19 +130,21 @@ class PPOAgent:
                         self.finish_path(episode_length)
                         if len(reward_history) > 100:
                             self.writer.add_scalar('global_avg_score', sum(reward_history[-100:-1]) / 100, episode)
-                        if len(reward_history) > 100 and sum(reward_history[-100:-1]) / 100 >= 95:
+                            """
+                        if len(reward_history) > 100 and sum(reward_history[-100:-1]) / 100 >= 2900:
                             solved = True
-
+"""
                         rospy.loginfo('episode: %.2f, total step: %.2f, last_episode length: %.2f, last_episode_reward: %.2f, '
                             'loss: %.4f, lr: %.4f, stability: %.4f' % (episode, step, episode_length, total_episode_reward, self.loss,
                                                         self.scheduler.get_lr()[0],stability_iterator))
                         rospy.loginfo(terminal)
                         time.sleep(2)
                         self.env.reset()
+                        """
 
                         if step > 50000:
                             solved = True
-
+                            """
                         break
 
                     pbar.update(1)
@@ -190,7 +192,10 @@ class PPOAgent:
         surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip).to(self.device) * torch.FloatTensor(self.memory['advantage']).to(self.device)
         pred_v = self.policy_network.v(torch.FloatTensor(self.memory['state']).to(self.device))
         v_loss = 0.5 * (pred_v - self.memory['td_target']).pow(2).to(self.device)  # Huber loss
-        entropy = torch.distributions.Categorical(pi).entropy().to(self.device)
+        try:
+            entropy = torch.distributions.Categorical(pi).entropy().to(self.device)
+        except ValueError:
+            print(pi)
         entropy = torch.tensor([[e] for e in entropy]).to(self.device)
         self.loss = (-torch.min(surr1, surr2) + self.v_coef * v_loss - self.entropy_coef * entropy).mean()
 

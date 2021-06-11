@@ -65,7 +65,7 @@ if __name__ == "__main__":
         checkpoint_interval
     )
 
-    train = False
+    train = True
 
     # Train loop
     if train:
@@ -80,6 +80,7 @@ if __name__ == "__main__":
         # Decide of a random constant order to hold
         theta_ld_max = rospy.get_param("/rainbow/theta_ld_max")
         order = np_random.uniform(-theta_ld_max, theta_ld_max)
+        order=1.0
         state = None
         step = 0
         while True:
