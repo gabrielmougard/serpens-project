@@ -56,6 +56,7 @@ class SnakeJoint(gym.Env):
         #is incremented as long as the joint remains close to the target. 
         #We consider the end of an episode if the joint remains in the target range for more than 50 steps
         self.stability_iterator=0
+        self.alpha_reward_factor=rospy.get_param('/rainbow/alpha_reward_factor')
 
         boundaries = np.array([
             self.theta_ld_max,
@@ -109,13 +110,13 @@ class SnakeJoint(gym.Env):
                     sys.exit(1)
 
 
-        epsilon = abs(self.episode_theta_ld - obs_message.position[2])
+        epsilon = abs(self.episode_theta_ld - obs_message.position[0])
         #rospy.loginfo("epsilon= "+ str(epsilon) + " previous_epsilon = "+ (str(self.previous_epsilon) if self.previous_epsilon else "not yet") )
         
         obs = [
             self.episode_theta_ld,
-            obs_message.position[2], # theta_l
-            obs_message.velocity[2], # theta_l_p
+            obs_message.position[0], # theta_l
+            obs_message.velocity[0], # theta_l_p
             obs_message.position[0], # theta_m
             obs_message.velocity[0], # theta_m_p
             self.episode_external_torque,
@@ -185,19 +186,25 @@ class SnakeJoint(gym.Env):
         #V2 similar to mountaincar
         reward=0.0
         if not done: 
-            reward = reward-math.exp(obs[6])
+            reward = reward+math.exp(-self.alpha_reward_factor*abs(obs[6])) + math.exp(-self.alpha_reward_factor*abs(obs[7])) + math.exp(-self.alpha_reward_factor*abs(obs[2]))
+            """
+            reward = reward+math.exp(-obs[7])
+            reward = reward+math.exp(-obs[2])
+            """
+            """
             if obs[6]<self.max_allowed_epsilon:
                 reward=reward+0.5
                 self.stability_iterator=self.stability_iterator+1
             else:
                 self.stability_iterator=0 
+                """
+            self.stability_iterator=0 
         elif self.steps_beyond_done is None:
             # Joint just diverged
             self.steps_beyond_done = 0
-            reward = reward+1.0
+            #reward = reward+1.0
         else:
             self.steps_beyond_done += 1
-        
         return reward
 
 

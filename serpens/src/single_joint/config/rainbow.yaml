@@ -32,4 +32,5 @@ rainbow:
   max_allowed_epsilon: 0.08726 # 5 deg
   min_allowed_epsilon_p: 0.00000001 # 1e-8
   max_ep_length: 200
+  alpha_reward_factor: 0.001
 

@@ -22,7 +22,7 @@
 
     <gazebo reference="pivot_to_moving_link_phantom">
         <selfCollide>false</selfCollide>
-        <springStiffness>14</springStiffness>
+        <springStiffness>100</springStiffness>
     </gazebo>
 
     <gazebo reference="moving_link_phantom">
