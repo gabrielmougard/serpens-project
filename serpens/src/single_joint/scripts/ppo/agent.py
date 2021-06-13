@@ -48,7 +48,7 @@ class PPOAgent:
         self.criterion = nn.MSELoss()
         self.memory = {
             'state': [], 'action': [], 'reward': [], 'next_state': [], 'action_prob': [], 'terminal': [], 'count': 0,
-            'advantage': [], 'td_target': torch.FloatTensor([]).to(self.device)
+            'advantage': [], 'td_target': torch.DoubleTensor([]).to(self.device)
         }
         #produces a unique timestamp for each run 
         run_timestamp=str(
@@ -63,8 +63,10 @@ class PPOAgent:
         #Will write scalars that can be visualized using tensorboard in the directory "runLogs/timestamp"
         self.writer = SummaryWriter("runLogs/" + run_timestamp)
         self.inference_writer = SummaryWriter("inferenceLogs/" + run_timestamp)
-        self.CHECKPOINT_PATH = "saved_models"
+        self.CHECKPOINT_PATH = f"single_joint_ckpts/saved_model_{run_timestamp}"
 
+        self.previous_global_avg_score = 0.0
+        self.model_updated_count = 0
 
     def new_random_game(self):
         self.env.reset()
@@ -100,7 +102,7 @@ class PPOAgent:
                     stability_iterator=0
 
                     # Choose action
-                    prob_a = self.policy_network.pi(torch.FloatTensor(current_state).to(self.device))
+                    prob_a = self.policy_network.pi(torch.DoubleTensor(current_state).to(self.device))
                     # print(prob_a)
                     action = torch.distributions.Categorical(prob_a).sample().item()
 
@@ -108,7 +110,6 @@ class PPOAgent:
                     state, reward, terminal, _, stability_iterator = self.env.step(action)
                     new_state = state
                     reward = -1 if terminal else reward
-                    self.writer.add_scalar('epsilon', state[6], step)
                     self.add_memory(current_state, action, reward/10.0, new_state, terminal, prob_a[action].item())
 
                     current_state = new_state
@@ -130,21 +131,19 @@ class PPOAgent:
                         self.finish_path(episode_length)
                         if len(reward_history) > 100:
                             self.writer.add_scalar('global_avg_score', sum(reward_history[-100:-1]) / 100, episode)
-                            """
-                        if len(reward_history) > 100 and sum(reward_history[-100:-1]) / 100 >= 2900:
+            
+                        if self.model_updated_count >= 100:
                             solved = True
-"""
-                        rospy.loginfo('episode: %.2f, total step: %.2f, last_episode length: %.2f, last_episode_reward: %.2f, '
-                            'loss: %.4f, lr: %.4f, stability: %.4f' % (episode, step, episode_length, total_episode_reward, self.loss,
-                                                        self.scheduler.get_lr()[0],stability_iterator))
+
+                        rospy.loginfo(
+                            'episode: %.2f, last_episode_reward: %.2f, loss: %.4f, lr: %.4f' % (
+                                episode, total_episode_reward, self.loss, self.scheduler.get_lr()[0]
+                            )
+                        )
                         rospy.loginfo(terminal)
                         time.sleep(2)
                         self.env.reset()
-                        """
-
-                        if step > 50000:
-                            solved = True
-                            """
+    
                         break
 
                     pbar.update(1)
@@ -158,8 +157,12 @@ class PPOAgent:
 
                 if episode % self.checkpoint_interval == 0:
                     # checkpoint state dict of model
-                    torch.save(self.policy_network.state_dict(), self.CHECKPOINT_PATH)
-                    self.previous_checkpointed_loss = self.loss
+                    if sum(reward_history[-100:-1]) / 100 > self.previous_global_avg_score:
+                        torch.save(self.policy_network.state_dict(), self.CHECKPOINT_PATH)
+                        self.previous_global_avg_score = sum(reward_history[-100:-1]) / 100
+                        self.model_updated_count = 0
+                    else:
+                        self.model_updated_count += 1
 
         self.env.close()
 
@@ -169,7 +172,7 @@ class PPOAgent:
             # Get initial state
             state, reward, action, terminal = self.new_random_game()
         # Choose action
-        prob_a = model.pi(torch.FloatTensor(state).to(self.device))
+        prob_a = model.pi(torch.DoubleTensor(state).to(self.device))
         # print(prob_a)
         action = torch.distributions.Categorical(prob_a).sample().item()
         new_state, new_reward, new_action, _, _ = self.env.step(action)
@@ -182,15 +185,15 @@ class PPOAgent:
 
     def update_network(self):
         # get ratio
-        pi = self.policy_network.pi(torch.FloatTensor(self.memory['state']).to(self.device))
+        pi = self.policy_network.pi(torch.DoubleTensor(self.memory['state']).to(self.device))
         new_probs_a = torch.gather(pi, 1, torch.tensor(self.memory['action']).to(self.device)).to(self.device)
-        old_probs_a = torch.FloatTensor(self.memory['action_prob']).to(self.device)
+        old_probs_a = torch.DoubleTensor(self.memory['action_prob']).to(self.device)
         ratio = (torch.exp(torch.log(new_probs_a) - torch.log(old_probs_a))).to(self.device)
 
         # surrogate loss
-        surr1 = ratio * torch.FloatTensor(self.memory['advantage']).to(self.device)
-        surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip).to(self.device) * torch.FloatTensor(self.memory['advantage']).to(self.device)
-        pred_v = self.policy_network.v(torch.FloatTensor(self.memory['state']).to(self.device))
+        surr1 = ratio * torch.DoubleTensor(self.memory['advantage']).to(self.device)
+        surr2 = torch.clamp(ratio, 1 - self.eps_clip, 1 + self.eps_clip).to(self.device) * torch.DoubleTensor(self.memory['advantage']).to(self.device)
+        pred_v = self.policy_network.v(torch.DoubleTensor(self.memory['state']).to(self.device))
         v_loss = 0.5 * (pred_v - self.memory['td_target']).pow(2).to(self.device)  # Huber loss
         try:
             entropy = torch.distributions.Categorical(pi).entropy().to(self.device)
@@ -202,7 +205,7 @@ class PPOAgent:
         self.optimizer.zero_grad()
         self.loss.backward()
 
-        torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), 10.0)
+        torch.nn.utils.clip_grad_norm_(self.policy_network.parameters(), 10000.0)
         
         self.optimizer.step()
         self.scheduler.step()
@@ -235,8 +238,8 @@ class PPOAgent:
         next_state = self.memory['next_state'][-length:]
         terminal = self.memory['terminal'][-length:]
 
-        td_target = torch.FloatTensor(reward).to(self.device) + self.gamma * self.policy_network.v((torch.FloatTensor(next_state) * torch.FloatTensor(terminal)).to(self.device))
-        delta = td_target - self.policy_network.v(torch.FloatTensor(state).to(self.device))
+        td_target = torch.DoubleTensor(reward).to(self.device) + self.gamma * self.policy_network.v((torch.DoubleTensor(next_state) * torch.DoubleTensor(terminal)).to(self.device))
+        delta = td_target - self.policy_network.v(torch.DoubleTensor(state).to(self.device))
         delta = delta.detach().cpu().numpy()
 
         # get advantage
