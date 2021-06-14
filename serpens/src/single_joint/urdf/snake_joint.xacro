@@ -118,7 +118,6 @@
     </link>
 
     <!--add a phantom of the moving link to display the desired position-->
-    <!--
     <link name="pivot_phantom">
         <visual>
             <origin xyz="0 0 0" rpy="0 0 0" />
@@ -169,7 +168,7 @@
             </geometry>
         </collision>
     </link>
--->
+
     <joint name="world_to_base" type="fixed">
         <parent link="world"/>
         <child link="base_link_rotation"/>
@@ -200,7 +199,7 @@
         -->
     </joint>
 
-    <!--add a phantom of the moving link to display the desired position
+    <!--add a phantom of the moving link to display the desired position-->
     <joint name="fixated_to_pivot_phantom" type="revolute">
         <parent link="fixated_link" />
         <child link="pivot_phantom" />
@@ -209,13 +208,9 @@
         <limit effort="1000.0" lower="${-M_PI / 2}" upper="${M_PI / 2}" velocity="1.0" />
     </joint>
 
-    <joint name="pivot_to_moving_link_phantom" type="revolute">
+    <joint name="pivot_to_moving_link_phantom" type="fixed">
         <parent link="pivot_phantom" />
         <child link="moving_link_phantom" />
-        <axis xyz="0 0 1" />
-        <origin xyz="0 0 0" />
-        <dynamics damping="100"/>
-        <limit effort="10" lower="-0.4" upper="0.4" velocity="1" />
     </joint>
     -->
     
@@ -243,7 +238,7 @@
     </transmission>
 -->
 <!--Added for phantom-->
-<!--
+
     <transmission name="motor_tran_phantom">
         <type>transmission_interface/SimpleTransmission</type>
         <joint name="fixated_to_pivot_phantom">
@@ -254,7 +249,7 @@
             <mechanicalReduction>1</mechanicalReduction>
         </actuator>
     </transmission>
-
+<!--
     <transmission name="spring_tran_phantom">
         <type>transmission_interface/SimpleTransmission</type>
         <joint name="pivot_to_moving_link_phantom">

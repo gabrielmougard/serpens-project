@@ -15,7 +15,6 @@
 
     <gazebo reference="pivot_to_moving_link">
     </gazebo>
-    <!--
 
     <gazebo reference="fixated_to_pivot_phantom">
         <selfCollide>false</selfCollide>
@@ -23,13 +22,11 @@
 
     <gazebo reference="pivot_to_moving_link_phantom">
         <selfCollide>false</selfCollide>
-        <springStiffness>100</springStiffness>
     </gazebo>
 
     <gazebo reference="moving_link_phantom">
         <material>Gazebo/Green</material>
     </gazebo>
-    -->
 
 
 
