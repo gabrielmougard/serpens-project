@@ -186,7 +186,7 @@ class SnakeJoint(gym.Env):
         #V2 similar to mountaincar
         reward=0.0
         if not done: 
-            reward = reward+math.exp(-self.alpha_reward_factor*abs(obs[6])) + math.exp(-self.alpha_reward_factor*abs(obs[7])) + math.exp(-self.alpha_reward_factor*abs(obs[2]))
+            reward = reward+math.exp(-self.alpha_reward_factor*abs(obs[6]))  + math.exp(-self.alpha_reward_factor*abs(obs[2])) + math.exp(-self.alpha_reward_factor*abs(obs[7]))
             """
             reward = reward+math.exp(-obs[7])
             reward = reward+math.exp(-obs[2])
@@ -314,7 +314,7 @@ class SnakeJoint(gym.Env):
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
         self.stability_iterator=0
-
+        """
         #set the phantom link (the green one) to the target position
         rospy.wait_for_service('/gazebo/set_model_configuration')
         try:
@@ -322,7 +322,7 @@ class SnakeJoint(gym.Env):
         except (rospy.ServiceException) as e:
             rospy.loginfo("/gazebo/reset_joints service call failed")
 
-        
+        """
         rospy.wait_for_service('/gazebo/pause_physics')
         try:
             self.pause()

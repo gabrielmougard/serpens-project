@@ -10,11 +10,12 @@
     </gazebo>
 
     <gazebo reference="fixated_to_pivot">
+        <springStiffness>100</springStiffness>
     </gazebo>
 
     <gazebo reference="pivot_to_moving_link">
-        <springStiffness>14</springStiffness>
     </gazebo>
+    <!--
 
     <gazebo reference="fixated_to_pivot_phantom">
         <selfCollide>false</selfCollide>
@@ -28,6 +29,7 @@
     <gazebo reference="moving_link_phantom">
         <material>Gazebo/Green</material>
     </gazebo>
+    -->
 
 
 
