@@ -71,7 +71,7 @@ class PPOAgent:
     def new_random_game(self):
         self.env.reset()
         action = self.env.action_space.sample()
-        screen, reward, terminal, info, stability_iterator = self.env.step(action)
+        screen, reward, terminal, info, stability_iterator,_,_,_ = self.env.step(action)
         return screen, reward, action, terminal
 
 
@@ -79,6 +79,9 @@ class PPOAgent:
         episode = 0
         step = 0
         reward_history = []
+        reward_history_epsilon = []
+        reward_history_epsilon_p = []
+        reward_history_theta_m_p = []
         avg_reward = []
         solved = False
 
@@ -94,12 +97,18 @@ class PPOAgent:
                 state, reward, action, terminal = self.new_random_game()
                 current_state = state
                 total_episode_reward = 1
+                total_epsilon_reward= 0
+                total_epsilon_p_reward=0
+                total_theta_m_reward=0
             
                 # A step in an episode
                 while not solved:
                     step += 1
                     episode_length += 1
                     stability_iterator=0
+                    reward_epsilon=0.0
+                    reward_epsilon_p=0.0
+                    reward_theta_m_p=0.0
 
                     # Choose action
                     prob_a = self.policy_network.pi(torch.DoubleTensor(current_state).to(self.device))
@@ -107,13 +116,17 @@ class PPOAgent:
                     action = torch.distributions.Categorical(prob_a).sample().item()
 
                     # Act
-                    state, reward, terminal, _, stability_iterator = self.env.step(action)
+                    state, reward, terminal, _, stability_iterator,reward_epsilon,reward_epsilon_p,reward_theta_m_p = self.env.step(action)
                     new_state = state
                     reward = -1 if terminal else reward
                     self.add_memory(current_state, action, reward/10.0, new_state, terminal, prob_a[action].item())
 
                     current_state = new_state
                     total_episode_reward += reward
+                    total_epsilon_reward += reward_epsilon
+                    total_epsilon_p_reward += reward_epsilon_p
+                    total_theta_m_reward += reward_theta_m_p
+
                     """
                     if terminal or total_episode_reward > 100:
                     """
@@ -125,12 +138,21 @@ class PPOAgent:
                     #Then the episode is over. 
                     if terminal or episode_length > 1000:#or stability_iterator>=50:
                         episode_length = step - start_step
+
                         reward_history.append(total_episode_reward)
+                        reward_history_epsilon.append(total_epsilon_reward)
+                        reward_history_epsilon_p.append(total_epsilon_p_reward)
+                        reward_history_theta_m_p.append(total_theta_m_reward)
+                        
                         avg_reward.append(sum(reward_history[-10:])/10.0)
+
                         rospy.loginfo(f"epsilon : {state[6]} \n epsilon_p : {state[7]}")
                         self.finish_path(episode_length)
                         if len(reward_history) > 100:
                             self.writer.add_scalar('global_avg_score', sum(reward_history[-100:-1]) / 100, episode)
+                            self.writer.add_scalar('score_epsilon', sum(reward_history_epsilon[-100:-1]) / 100, episode)
+                            self.writer.add_scalar('score_epsilon_p', sum(reward_history_epsilon_p[-100:-1]) / 100, episode)
+                            self.writer.add_scalar('score theta_m_p', sum(reward_history_theta_m_p[-100:-1]) / 100, episode)
             
                         if self.model_updated_count >= 100:
                             solved = True
@@ -175,7 +197,7 @@ class PPOAgent:
         prob_a = model.pi(torch.DoubleTensor(state).to(self.device))
         # print(prob_a)
         action = torch.distributions.Categorical(prob_a).sample().item()
-        new_state, new_reward, new_action, _, _ = self.env.step(action)
+        new_state, new_reward, new_action, _, _,_,_,_ = self.env.step(action)
 
         # plotting data
         self.inference_writer.add_scalar('epsilon', new_state[6], step)

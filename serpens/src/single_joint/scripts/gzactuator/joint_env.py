@@ -185,8 +185,14 @@ class SnakeJoint(gym.Env):
         """
         #V2 similar to mountaincar
         reward=0.0
+        reward_epsilon=0.0
+        reward_epsilon_p=0.0
+        reward_theta_m_p=0.0
         if not done: 
-            reward = reward+math.exp(-self.alpha_reward_factor*abs(obs[6]))  + math.exp(-self.alpha_reward_factor*abs(obs[2])) + math.exp(-self.alpha_reward_factor*abs(obs[7]))
+            reward = reward+math.exp(-(self.alpha_reward_factor/10)*abs(obs[6]))  + math.exp(-self.alpha_reward_factor*abs(obs[2])) + math.exp(-self.alpha_reward_factor*abs(obs[7]))
+            reward_epsilon=math.exp(-self.alpha_reward_factor*abs(obs[6]))
+            reward_epsilon_p=math.exp(-self.alpha_reward_factor*abs(obs[7]))
+            reward_theta_m_p=math.exp(-self.alpha_reward_factor*abs(obs[2]))
             """
             reward = reward+math.exp(-obs[7])
             reward = reward+math.exp(-obs[2])
@@ -205,7 +211,7 @@ class SnakeJoint(gym.Env):
             #reward = reward+1.0
         else:
             self.steps_beyond_done += 1
-        return reward
+        return reward,reward_epsilon,reward_epsilon_p,reward_theta_m_p
 
 
     def step(self, action):
@@ -222,11 +228,13 @@ class SnakeJoint(gym.Env):
         simulation and get the observations result of performing that action.
         """
         
-        rospy.wait_for_service('/gazebo/unpause_physics')
+        rospy.wait_for_service('/gazebo/pause_physics')
         try:
-            self.unpause()
+            self.pause()
         except (rospy.ServiceException) as e:
             rospy.loginfo("rosunpause failed!")
+
+        
 
         self.iterator+=1
         # Execute "action"
@@ -251,6 +259,13 @@ class SnakeJoint(gym.Env):
 
         joint_value = Float64()
         joint_value.data = self.current_torque + self.episode_external_torque
+
+        rospy.wait_for_service('/gazebo/unpause_physics')
+        try:
+            self.unpause()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("rosunpause failed!")
+
         self.torque_pub.publish(joint_value) 
 
         self.ros_clock = rospy.get_rostime().nsecs
@@ -258,14 +273,21 @@ class SnakeJoint(gym.Env):
         obs = self.take_observation()
         self.eps_buffer.append(obs[6])
         done = self._is_done(obs)
-        reward = self._compute_reward(obs, done)
+
+        reward,reward_epsilon,reward_epsilon_p,reward_theta_m_p = self._compute_reward(obs, done)
         info = {}
 
         self.rqt_publishing(obs)
         
         self.rate.sleep()
+
+        rospy.wait_for_service('/gazebo/pause_physics')
+        try:
+            self.pause()
+        except (rospy.ServiceException) as e:
+            rospy.loginfo("rosunpause failed!")
         
-        return obs, reward, done, info, self.stability_iterator
+        return obs, reward, done, info, self.stability_iterator,reward_epsilon,reward_epsilon_p,reward_theta_m_p
 
 
 
