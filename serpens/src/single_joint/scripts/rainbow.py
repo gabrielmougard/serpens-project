@@ -4,6 +4,7 @@
 The main function for the Reinforcement training node.
 """
 import time
+import math
 
 import rospy
 import torch
@@ -12,6 +13,7 @@ from gym.utils import seeding
 from ppo.agent import PPOAgent
 from ppo.network import MlpPolicy
 from gzactuator.joint_env import SnakeJoint 
+
 
 if __name__ == "__main__":
     # Initialize the node and name it.
@@ -65,7 +67,7 @@ if __name__ == "__main__":
         checkpoint_interval
     )
 
-    train = False
+    train = True
 
     # Train loop
     if train:
@@ -74,15 +76,18 @@ if __name__ == "__main__":
         # Inference
         inference_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model = MlpPolicy(action_size=joint_env.action_space.n).to(inference_device)
-        model.load_state_dict(torch.load("single_joint_ckpts/saved_model_12_6_18_7_57"))
+        model.load_state_dict(torch.load("single_joint_ckpts/saved_model_14_6_14_32_0"))
         model.eval()
         np_random, _ = seeding.np_random(5048795115606990371)
         # Decide of a random constant order to hold
         theta_ld_max = rospy.get_param("/rainbow/theta_ld_max")
-        order = np_random.uniform(-theta_ld_max, theta_ld_max)
-        order=1.0
+        #order = np_random.uniform(-theta_ld_max, theta_ld_max)
+        t = 0
         state = None
         step = 0
         while True:
+            order= 1.0 * math.sin(t)
             state, _, _, step = agent.predict(model, order, step, state=state)
+            time.sleep(1.5)
             rospy.loginfo(f"[INFERENCE] epsilon: {state[6]}, step: {step}")
+            t += 1
